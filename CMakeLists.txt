@@ -1,0 +1,63 @@
+cmake_minimum_required(VERSION 3.14)
+project(IntroductionGame)
+
+# Use modern C++
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# --- Dependency Management (FetchContent) ---
+include(FetchContent)
+
+# GLFW
+FetchContent_Declare(
+  glfw
+  GIT_REPOSITORY https://github.com/glfw/glfw.git
+  GIT_TAG 3.4
+)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(glfw)
+
+# ENet
+FetchContent_Declare(
+  enet
+  GIT_REPOSITORY https://github.com/lsalzman/enet.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(enet)
+
+# Find OpenGL
+find_package(OpenGL REQUIRED)
+
+# --- Project Setup ---
+
+# Add your source files to the executable
+add_executable(${PROJECT_NAME} 
+    src/main.cpp 
+    src/glad.c
+    src/Shaders.cpp
+)
+
+# Tell the compiler where to find header files
+target_include_directories(${PROJECT_NAME} PRIVATE 
+    include
+)
+
+# Link the libraries to your game
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+    glfw
+    enet
+    OpenGL::GL
+)
+
+# Platform-specific linking
+if(UNIX AND NOT APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
+endif()
+
+if(WIN32)
+    # ENet requires these on Windows
+    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 winmm)
+endif()

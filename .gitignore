@@ -1,0 +1,24 @@
+# Build artifacts
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled binaries
+IntroductionGame
+
+# Archives and temporary files
+glad.zip
+*.o
+*.d
+
+# OS generated files
+.DS_Store
+.directory
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.user
