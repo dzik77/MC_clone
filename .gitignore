@@ -7,6 +7,7 @@ Makefile
 
 # Compiled binaries
 IntroductionGame
+IntroductionGame.exe
 
 # Archives and temporary files
 glad.zip
@@ -22,3 +23,13 @@ glad.zip
 .idea/
 *.swp
 *.user
+
+#enet
+enet-1.3.18/
+include/enet/
+
+#ninja
+.ninja_deps
+.ninja_log
+build.ninja
+_deps

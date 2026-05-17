@@ -19,14 +19,6 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw)
 
-# ENet
-FetchContent_Declare(
-  enet
-  GIT_REPOSITORY https://github.com/lsalzman/enet.git
-  GIT_TAG master
-)
-FetchContent_MakeAvailable(enet)
-
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
@@ -37,6 +29,10 @@ add_executable(${PROJECT_NAME}
     src/main.cpp 
     src/glad.c
     src/Shaders.cpp
+    src/Camera.cpp
+    src/Game.cpp
+    src/World.cpp
+    src/Chunk.cpp
 )
 
 # Tell the compiler where to find header files
@@ -48,16 +44,20 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
     glfw
-    enet
     OpenGL::GL
 )
 
 # Platform-specific linking
-if(UNIX AND NOT APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
-endif()
-
 if(WIN32)
-    # ENet requires these on Windows
+    # ENet for Windows using provided .lib files
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        target_link_libraries(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/enet-1.3.18/enet64.lib")
+    else()
+        target_link_libraries(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/enet-1.3.18/enet.lib")
+    endif()
+    
+    # ENet requirements on Windows
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 winmm)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
 endif()
