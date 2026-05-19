@@ -1,4 +1,4 @@
-#version 330 core
+#version 460 core
 
 layout (location = 0) in uint packedData;
 out vec2 TexCoords;

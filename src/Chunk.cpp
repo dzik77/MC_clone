@@ -84,16 +84,20 @@ Chunk create_chunk(glm::ivec3 chunkPosition) {
         }
     }
 
-    glGenVertexArrays(1, &chunk.vao);
-    glGenBuffers(1, &chunk.vbo);
-    glGenBuffers(1, &chunk.ebo);
-    glBindVertexArray(chunk.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, chunk.vbo);
-    glBufferData(GL_ARRAY_BUFFER, chunk.vertices.size() * sizeof(uint32_t), chunk.vertices.data(), GL_STATIC_DRAW);
-    glVertexAttribIPointer(0, 1, GL_UNSIGNED_INT, sizeof(uint32_t), (void *) 0);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, chunk.ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, chunk.indicies.size() * sizeof(uint16_t), chunk.indicies.data(), GL_STATIC_DRAW);
+    glCreateVertexArrays(1, &chunk.vao);
+    glCreateBuffers(1, &chunk.vbo);
+    glCreateBuffers(1, &chunk.ebo);
+
+    glNamedBufferData(chunk.vbo, chunk.vertices.size() * sizeof(uint32_t), chunk.vertices.data(), GL_STATIC_DRAW);
+    glNamedBufferData(chunk.ebo, chunk.indicies.size() * sizeof(uint16_t), chunk.indicies.data(), GL_STATIC_DRAW);
+    
+    glVertexArrayElementBuffer(chunk.vao, chunk.ebo);
+
+    glEnableVertexArrayAttrib(chunk.vao, 0);
+    glVertexArrayAttribIFormat(chunk.vao, 0, 1, GL_UNSIGNED_INT, 0);
+
+    glVertexArrayVertexBuffer(chunk.vao, 0, chunk.vbo, 0, sizeof(uint32_t));
+    glVertexArrayAttribBinding(chunk.vao, 0, 0);
 
     return chunk;
 }

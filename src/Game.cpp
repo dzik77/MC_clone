@@ -12,9 +12,13 @@ Game::Game() {
         enet_deinitialize();
         throw std::runtime_error("Failed to initialize GLFW.");
     }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    #ifdef __linux__
+        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND);
+    #endif
 
     window = glfwCreateWindow(800, 600, "Introduction Game", nullptr, nullptr);
     if (!window) {
@@ -38,6 +42,18 @@ Game::Game() {
         enet_deinitialize();
         throw std::runtime_error("Failed to initialize GLAD.");
     }
+
+    /*
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); 
+    glDebugMessageCallback([](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam) {
+        if (severity == GL_DEBUG_SEVERITY_HIGH || severity == GL_DEBUG_SEVERITY_MEDIUM) {
+            std::cerr << "GL CALLBACK: type = " << type << ", severity = " << severity << ", message = " << message << "\n";
+        }
+    }, nullptr); 
+    */
+    
+
     std::cout << "OpenGL " << GLVersion.major << "." << GLVersion.minor << " initialized." << std::endl;
     std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
     std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;

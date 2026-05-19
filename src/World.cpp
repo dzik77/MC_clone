@@ -39,8 +39,7 @@ void World::loadChunks(glm::vec3 playerPosition) {
 void World::render(Shader& shader) {
 
     shader.use();
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, textureArray.texture);
+    glBindTextureUnit(0, textureArray.texture); 
     for (int i = 0; i < Chunks.size(); i++){
         glm::mat4 model = glm::translate(glm::mat4(1.f), glm::vec3(Chunks[i].position * CHUNK_SIZE));
         shader.setMat4("model", model);
