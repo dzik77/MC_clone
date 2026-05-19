@@ -1,71 +1,77 @@
 #include "Shaders.hpp"
+#include <iostream>
+#include <stdexcept>
 #include <glm/gtc/type_ptr.hpp>
 
-Shader::Shader(const fs::path& vertexShader, const fs::path& fragmentShader) {
+Shader::Shader(const std::filesystem::path& vertexShader, const std::filesystem::path& fragmentShader) {
     
-    if (!fs::exists(vertexShader) || !fs::exists(fragmentShader)) {
-        throw std::runtime_error("Shader file not found.");
-    }
+    auto readFile = [](const std::filesystem::path& path) -> std::string {
+        std::ifstream file(path);
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open shader file: " + path.string());
+        }
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        return buffer.str();
+    };
 
     std::string vertexCode, fragmentCode;
-    const char *vShaderCode, *fShaderCode;
-    std::ifstream vertexShaderFile(vertexShader), fragmentShaderFile(fragmentShader);
-
-    if (!vertexShaderFile.is_open() || !fragmentShaderFile.is_open()) {
-        throw std::runtime_error("Failed to open shader file.");
+    try {
+        vertexCode = readFile(vertexShader);
+        fragmentCode = readFile(fragmentShader);
+    } catch (const std::exception& e) {
+        std::cerr << "Shader Loading Error: " << e.what() << std::endl;
+        throw;
     }
 
-    std::stringstream buffer;
-    buffer << vertexShaderFile.rdbuf();
-    vertexCode = buffer.str();
-    vShaderCode = vertexCode.c_str();
-
-    buffer.str("");
-    buffer.clear();
-
-    buffer << fragmentShaderFile.rdbuf();
-    fragmentCode = buffer.str();
-    fShaderCode = fragmentCode.c_str();
+    const char* vShaderCode = vertexCode.c_str();
+    const char* fShaderCode = fragmentCode.c_str();
 
     unsigned int vertex, fragment;
     int success;
-    char infoLog[512];
+    char infoLog[2048];
 
+    std::cout << "Compiling vertex shader: " << vertexShader << std::endl;
     vertex = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex, 1, &vShaderCode, nullptr);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if (!success) {
-        glGetShaderInfoLog(vertex, 512, nullptr, infoLog);
-        throw std::runtime_error("Vertex shader compilation failed: " + std::string(infoLog));
+        glGetShaderInfoLog(vertex, 2048, nullptr, infoLog);
+        std::cerr << "Vertex Shader Error (" << vertexShader << "):\n" << infoLog << std::endl;
+        throw std::runtime_error("Vertex shader compilation failed.");
     }
 
+    std::cout << "Compiling fragment shader: " << fragmentShader << std::endl;
     fragment = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment, 1, &fShaderCode, nullptr);
     glCompileShader(fragment);
     glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
-    if (!success) { 
-        glGetShaderInfoLog(fragment, 512, nullptr, infoLog);
-        throw std::runtime_error("Fragment shader compilation failed: " + std::string(infoLog));
+    if (!success) {
+        glGetShaderInfoLog(fragment, 2048, nullptr, infoLog);
+        std::cerr << "Fragment Shader Error (" << fragmentShader << "):\n" << infoLog << std::endl;
+        throw std::runtime_error("Fragment shader compilation failed.");
     }
 
+    std::cout << "Linking shader program..." << std::endl;
     ID = glCreateProgram();
     glAttachShader(ID, vertex);
     glAttachShader(ID, fragment);
     glLinkProgram(ID);
     glGetProgramiv(ID, GL_LINK_STATUS, &success);
     if (!success) {
-        glGetProgramInfoLog(ID, 512, nullptr, infoLog);
-        throw std::runtime_error("Shader program linking failed: " + std::string(infoLog));
+        glGetProgramInfoLog(ID, 2048, nullptr, infoLog);
+        std::cerr << "Shader Program Link Error:\n" << infoLog << std::endl;
+        throw std::runtime_error("Shader program linking failed.");
     }
 
     glDeleteShader(vertex);
     glDeleteShader(fragment);
-
+    std::cout << "Shader program linked successfully. ID: " << ID << std::endl;
 }
 
 void Shader::setBool(const std::string &name, bool value) const {
-    glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
+    glUniform1i(glGetUniformLocation(ID, name.c_str()), (int)value);
 }
 
 void Shader::setInt(const std::string &name, int value) const {

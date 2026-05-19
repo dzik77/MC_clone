@@ -7,9 +7,6 @@ Game::Game() {
     }
     
     glfwSetErrorCallback(error_callback);
-#ifdef __linux__
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND); 
-#endif
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW." << std::endl;
         enet_deinitialize();
@@ -26,9 +23,12 @@ Game::Game() {
         enet_deinitialize();
         throw std::runtime_error("Failed to create GLFW window."); 
     }
+    std::cout << "GLFW Window created successfully." << std::endl;
+
     glfwSetWindowUserPointer(window, this);
     glfwMakeContextCurrent(window);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); 
+    glfwSwapInterval(0);
     glfwSetCursorPosCallback(window, mouse_callback);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -39,12 +39,30 @@ Game::Game() {
         throw std::runtime_error("Failed to initialize GLAD.");
     }
     std::cout << "OpenGL " << GLVersion.major << "." << GLVersion.minor << " initialized." << std::endl;
+    std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
+    std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glViewport(0,0,800,600);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+
+    // Force a buffer swap and event poll to make window visible on some platforms
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+
+    stbi_set_flip_vertically_on_load(true);
+
+    std::cout << "Loading textures..." << std::endl;
+    world.loadTextures();
+    std::cout << "Textures loaded." << std::endl;
+    
 }
 
-Game::~Game() {
+Game::~Game(){
+    world.clean();
     glfwDestroyWindow(window);
     glfwTerminate();
     enet_deinitialize();
@@ -53,14 +71,19 @@ Game::~Game() {
 void Game::run() {
 
     // shaders
+    std::cout << "Loading shaders..." << std::endl;
     Shader shader(vertexShaderPath, fragmentShaderPath);
+    std::cout << "Shaders loaded." << std::endl;
     shader.use();
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 100.f);
+    shader.setInt("textureArray", 0);
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 1000.f);
     shader.setMat4("projection", projection);
     shader.setMat4("model", glm::mat4(1.f));
 
     float lastFrame, currentFrame, deltaTime;
     lastFrame = glfwGetTime();
+    int frameCount = 0;
+    float lastFPSmeasure = lastFrame;
 
     while(!glfwWindowShouldClose(window)){
 
@@ -68,8 +91,20 @@ void Game::run() {
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
+        frameCount++;
+        if (currentFrame - lastFPSmeasure >= 1.0){
+            std::string  title = "FPS: " + std::to_string(frameCount);
+            //std::cout << frameCount << std::endl;
+            glfwSetWindowTitle(window, title.c_str());
+            frameCount = 0;
+            lastFPSmeasure = currentFrame;
+        }
+
         processInput(deltaTime);
         
+        glClearColor(0.2f,0.3f,0.3f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
         shader.setMat4("view", camera.getView());
 
         world.loadChunks(camera.getPosition());

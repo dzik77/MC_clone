@@ -7,12 +7,10 @@
 #include <filesystem>
 #include <glm/glm.hpp>
 
-#define fs std::filesystem
-
 class Shader {
     public:
 
-        Shader(const fs::path& vertexShader, const fs::path& fragmentShader);
+        Shader(const std::filesystem::path& vertexShader, const std::filesystem::path& fragmentShader);
         void use() const {
             glUseProgram(ID);
         }

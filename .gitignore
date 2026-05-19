@@ -33,3 +33,6 @@ include/enet/
 .ninja_log
 build.ninja
 _deps
+
+#textures
+block/

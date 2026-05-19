@@ -10,16 +10,16 @@ void Camera::KeyboardInput(Direction direction, float deltaTime) {
             Position -= Front * Velocity;
             break;
         case Direction::RIGHT:
-            Position -= Right * Velocity;
-            break;
-        case Direction::LEFT:
             Position += Right * Velocity;
             break;
+        case Direction::LEFT:
+            Position -= Right * Velocity;
+            break;
         case Direction::UP:
-            Position += Up * Velocity;
+            Position += WorldUp * Velocity;
             break;
         case Direction::DOWN:
-            Position -= Up * Velocity;
+            Position -= WorldUp * Velocity;
             break;
         default:
             break;
@@ -47,5 +47,5 @@ void Camera::updateVectors() {
     Front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch)); 
     Front = glm::normalize(Front);
     Right = glm::normalize(glm::cross(Front, WorldUp));
-    Up = glm::normalize(glm::cross(Front, Right));
+    Up = glm::normalize(glm::cross(Right, Front));
 }

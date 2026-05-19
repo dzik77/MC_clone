@@ -25,15 +25,8 @@ find_package(OpenGL REQUIRED)
 # --- Project Setup ---
 
 # Add your source files to the executable
-add_executable(${PROJECT_NAME} 
-    src/main.cpp 
-    src/glad.c
-    src/Shaders.cpp
-    src/Camera.cpp
-    src/Game.cpp
-    src/World.cpp
-    src/Chunk.cpp
-)
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "src/*.cpp" "src/*.c")
+add_executable(${PROJECT_NAME} ${SRC_FILES})
 
 # Tell the compiler where to find header files
 target_include_directories(${PROJECT_NAME} PRIVATE 
@@ -59,5 +52,6 @@ if(WIN32)
     # ENet requirements on Windows
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 winmm)
 elseif(UNIX AND NOT APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
+    # Use system enet on Linux
+    target_link_libraries(${PROJECT_NAME} PRIVATE dl enet)
 endif()

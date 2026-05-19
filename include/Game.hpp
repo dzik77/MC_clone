@@ -10,6 +10,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <Camera.hpp>
 #include <World.hpp>
+#include <string>
+#include <stb_image.h>
 
 class Game{
     public:
