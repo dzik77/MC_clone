@@ -13,6 +13,8 @@
 #include <string>
 #include <stb_image.h>
 
+#define DEBUG
+
 class Game{
     public:
         Game();

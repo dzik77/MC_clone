@@ -22,6 +22,12 @@ FetchContent_MakeAvailable(glfw)
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
+# FastNoise2
+set(FASTNOISE2_NOISETOOL OFF CACHE BOOL "Build Noise Tool" FORCE)
+set(FASTNOISE2_TESTS OFF CACHE BOOL "Build tests" FORCE)
+
+add_subdirectory("deps/FastNoise2")
+
 # --- Project Setup ---
 
 # Add your source files to the executable
@@ -53,5 +59,5 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 winmm)
 elseif(UNIX AND NOT APPLE)
     # Use system enet on Linux
-    target_link_libraries(${PROJECT_NAME} PRIVATE dl enet)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dl enet FastNoise)
 endif()
