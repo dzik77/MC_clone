@@ -1,0 +1,146 @@
+#include "VramAllocator.hpp"
+
+VramAllocator::VramAllocator(uint32_t MAX_VERTICES, uint32_t MAX_INDICES) {
+
+    VBOSize = MAX_VERTICES * sizeof(uint32_t);
+    EBOSize = MAX_INDICES * sizeof(uint16_t);
+
+    glCreateBuffers(1, &VBO);
+    glCreateBuffers(1, &EBO);
+
+    glNamedBufferStorage(VBO, VBOSize, nullptr, accessFlags);
+    glNamedBufferStorage(EBO, EBOSize, nullptr, accessFlags);
+
+    vertexData = (uint32_t*)glMapNamedBufferRange(VBO, 0, VBOSize, accessFlags);
+    indexData = (uint16_t*)glMapNamedBufferRange(EBO, 0, EBOSize, accessFlags);
+
+    freeVertexBlocks.insert({0, MAX_VERTICES});
+    freeVertexBlocksOffset.insert({0, MAX_VERTICES});
+    freeIndexBlocks.insert({0, MAX_INDICES});
+    freeIndexBlocksOffset.insert({0, MAX_INDICES});
+
+}
+
+VramAllocator::~VramAllocator(){
+
+    glUnmapNamedBuffer(VBO);
+    glUnmapNamedBuffer(EBO);
+
+    vertexData = nullptr;
+    indexData = nullptr;
+
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
+
+}
+
+BufferAllocation VramAllocator::allocate(uint32_t vertexCount, uint32_t indexCount) {
+    vertexCount += VERTEX_FAT_ALLOCATION;
+    indexCount += INDEX_FAT_ALLOCATION;
+    BufferAllocation allocation = {0, 0, vertexCount, indexCount};
+
+    auto freeVertexIt = freeVertexBlocks.lower_bound({0, vertexCount});
+    if (freeVertexIt == freeVertexBlocks.end()) {
+        throw std::runtime_error("Not enough vertex buffer memory available");
+    }
+    auto freeVertexOffsetIt = freeVertexBlocksOffset.find({freeVertexIt->offset, freeVertexIt->size});
+    if (freeVertexOffsetIt == freeVertexBlocksOffset.end()) {
+        throw std::runtime_error("Not enough vertex buffer memory available");
+    }
+    auto freeIndexIt = freeIndexBlocks.lower_bound({0, indexCount});
+    if (freeIndexIt == freeIndexBlocks.end()) {
+        throw std::runtime_error("Not enough index buffer memory available");
+    }
+    auto freeIndexOffsetIt = freeIndexBlocksOffset.find({freeIndexIt->offset, freeIndexIt->size});
+    if (freeIndexOffsetIt == freeIndexBlocksOffset.end()) {
+        throw std::runtime_error("Not enough index buffer memory available");
+    }
+
+    allocation.vertexBlocks = freeVertexIt->offset;
+    allocation.indexBlocks = freeIndexIt->offset;
+
+    if (freeVertexIt->size > vertexCount) {
+        freeVertexBlocks.insert(Block{freeVertexIt->offset + vertexCount, freeVertexIt->size - vertexCount});
+        freeVertexBlocksOffset.insert(Block{freeVertexIt->offset + vertexCount, freeVertexIt->size - vertexCount});
+    }
+    freeVertexBlocks.erase(freeVertexIt);
+    freeVertexBlocksOffset.erase(freeVertexOffsetIt);
+
+    if (freeIndexIt->size > indexCount) {
+        freeIndexBlocks.insert(Block{freeIndexIt->offset + indexCount, freeIndexIt->size - indexCount});
+        freeIndexBlocksOffset.insert(Block{freeIndexIt->offset + indexCount, freeIndexIt->size - indexCount});
+    }
+    freeIndexBlocks.erase(freeIndexIt);
+    freeIndexBlocksOffset.erase(freeIndexOffsetIt);
+
+    return allocation;
+}
+
+void VramAllocator::free(const BufferAllocation &allocation) {
+
+    Block vertexBlock = {allocation.vertexBlocks, allocation.vertexCount};
+    auto rightVertexBlockOffsetIt = freeVertexBlocksOffset.upper_bound({vertexBlock.offset, 0});
+    if (rightVertexBlockOffsetIt != freeVertexBlocksOffset.end()) {
+        auto rightVertexBlockIt = freeVertexBlocks.find({rightVertexBlockOffsetIt->offset, rightVertexBlockOffsetIt->size});
+        if (rightVertexBlockIt != freeVertexBlocks.end() && vertexBlock.offset + vertexBlock.size == rightVertexBlockIt->offset) {
+            vertexBlock.size += rightVertexBlockIt->size;
+            freeVertexBlocksOffset.erase(rightVertexBlockOffsetIt);
+            freeVertexBlocks.erase(rightVertexBlockIt);
+        }
+    }
+    auto leftVertexBlockOffsetIt = freeVertexBlocksOffset.lower_bound({vertexBlock.offset, 0});
+    if (leftVertexBlockOffsetIt != freeVertexBlocksOffset.begin()){
+        leftVertexBlockOffsetIt--;
+        auto leftVertexBlockIt = freeVertexBlocks.find({leftVertexBlockOffsetIt->offset, leftVertexBlockOffsetIt->size});
+        if (leftVertexBlockIt != freeVertexBlocks.end() && leftVertexBlockOffsetIt->offset + leftVertexBlockOffsetIt->size == vertexBlock.offset) {
+            vertexBlock.offset = leftVertexBlockOffsetIt->offset;
+            vertexBlock.size += leftVertexBlockOffsetIt->size;
+            freeVertexBlocks.erase(leftVertexBlockIt);
+            freeVertexBlocksOffset.erase(leftVertexBlockOffsetIt);
+        }
+    }
+    freeVertexBlocks.insert(vertexBlock);
+    freeVertexBlocksOffset.insert(vertexBlock);
+
+    Block indexBlock = {allocation.indexBlocks, allocation.indexCount};
+    auto rightIndexBlockOffsetIt = freeIndexBlocksOffset.upper_bound({indexBlock.offset, 0});
+    if (rightIndexBlockOffsetIt != freeIndexBlocksOffset.end()) {
+        auto rightIndexBlockIt = freeIndexBlocks.find({rightIndexBlockOffsetIt->offset, rightIndexBlockOffsetIt->size});
+        if (rightIndexBlockIt != freeIndexBlocks.end() && indexBlock.offset + indexBlock.size == rightIndexBlockIt->offset) {
+            indexBlock.size += rightIndexBlockIt->size;
+            freeIndexBlocksOffset.erase(rightIndexBlockOffsetIt);
+            freeIndexBlocks.erase(rightIndexBlockIt);
+        }
+    }
+    auto leftIndexBlockOffsetIt = freeIndexBlocksOffset.lower_bound({indexBlock.offset, 0});
+    if (leftIndexBlockOffsetIt != freeIndexBlocksOffset.begin()){
+        leftIndexBlockOffsetIt--;
+        auto leftIndexBlockIt = freeIndexBlocks.find({leftIndexBlockOffsetIt->offset, leftIndexBlockOffsetIt->size});
+        if (leftIndexBlockIt != freeIndexBlocks.end() && leftIndexBlockOffsetIt->offset + leftIndexBlockOffsetIt->size == indexBlock.offset) {
+            indexBlock.offset = leftIndexBlockOffsetIt->offset;
+            indexBlock.size += leftIndexBlockOffsetIt->size;
+            freeIndexBlocks.erase(leftIndexBlockIt);
+            freeIndexBlocksOffset.erase(leftIndexBlockOffsetIt);
+        }
+    }
+    freeIndexBlocks.insert(indexBlock);
+    freeIndexBlocksOffset.insert(indexBlock);
+}
+
+BufferAllocation VramAllocator::reallocate(const BufferAllocation &oldAllocation, uint32_t newVertexCount, uint32_t newIndexCount)
+{
+    BufferAllocation newAllocation = allocate(newVertexCount, newIndexCount);
+
+    std::memcpy(
+        (void *)(vertexData + newAllocation.vertexBlocks), 
+        (void *)(vertexData + oldAllocation.vertexBlocks), 
+        std::min(oldAllocation.vertexCount, newAllocation.vertexCount) * sizeof(uint32_t));
+    std::memcpy(
+        (void *)(indexData + newAllocation.indexBlocks), 
+        (void *)(indexData + oldAllocation.indexBlocks), 
+        std::min(oldAllocation.indexCount, newAllocation.indexCount) * sizeof(uint16_t));
+
+    free(oldAllocation);
+    
+    return newAllocation;
+}

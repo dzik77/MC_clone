@@ -9,6 +9,7 @@
 
 class World{
     public:
+    
         World();
         void loadTextures();
         void generateTerrain(ChunkColumn &chunkColumn);
