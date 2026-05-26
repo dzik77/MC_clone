@@ -35,8 +35,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# Find OpenGL
+# Find OpenGL and Threads
 find_package(OpenGL REQUIRED)
+find_package(Threads REQUIRED)
 
 # FastNoise2
 set(FASTNOISE2_NOISETOOL OFF CACHE BOOL "Build Noise Tool" FORCE)
@@ -68,6 +69,7 @@ target_link_libraries(${PROJECT_NAME}
     FastNoise
     glm::glm
     OpenGL::GL
+    Threads::Threads
 )
 
 # Platform-specific linking requirements

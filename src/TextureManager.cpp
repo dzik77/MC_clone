@@ -16,7 +16,7 @@ void TextureArray::createTextureArray(const std::vector<fs::path> texturePaths, 
             throw std::runtime_error("Can't find texture file: " + texturePaths[i].string());
 
         int width, height, channels;
-        unsigned char * data = stbi_load(texturePaths[i].c_str(), &width, &height, &channels, STBI_rgb_alpha);
+        unsigned char * data = stbi_load(texturePaths[i].string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
         if (!data)
             throw std::runtime_error("Failed to load texture: " + texturePaths[i].string());
 
