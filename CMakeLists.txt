@@ -51,11 +51,6 @@ add_subdirectory("deps/FastNoise2")
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "src/*.cpp" "src/*.c")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 
-# Inject the project root path so the code can find textures/shaders reliably
-target_compile_definitions(${PROJECT_NAME} PRIVATE 
-    ROOT_DIR="${CMAKE_SOURCE_DIR}/"
-)
-
 # Tell the compiler where to find header files
 target_include_directories(${PROJECT_NAME} PRIVATE 
     include

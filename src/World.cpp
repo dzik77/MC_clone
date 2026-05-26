@@ -4,10 +4,10 @@
 #include <iostream>
 
 const std::vector<std::filesystem::path> texturePaths = {
-    std::filesystem::path(ROOT_DIR) / "textures/stone.png",
-    std::filesystem::path(ROOT_DIR) / "textures/dirt.png",
-    std::filesystem::path(ROOT_DIR) / "textures/grass_block_side.png",
-    std::filesystem::path(ROOT_DIR) / "textures/grass_block_top_item.png"
+    "textures/stone.png",
+    "textures/dirt.png",
+    "textures/grass_block_side.png",
+    "textures/grass_block_top_item.png"
 };
 
 
