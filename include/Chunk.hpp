@@ -2,11 +2,45 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <Direction.hpp>
+#include <VramAllocator.hpp>
+#include <utility>
+
+struct ChunkPosition{
+    glm::vec4 position;
+};
 
 constexpr int CHUNK_SIZE = 16;
 // expand to 16 later, for now we can just use 4 to test the chunk column rendering
 constexpr int CHUNK_COLUMN_HEIGHT = 4;
 
+#ifndef NOT_AZDO_RENDERING
+class Chunk{
+    public:
+    Chunk();
+    Chunk(VramAllocator* vramAllocator);
+    ~Chunk();
+
+    void init(VramAllocator* vramAllocator);
+
+    // Delete copy semantics to prevent accidental shallow copies
+    Chunk(const Chunk&) = delete;
+    Chunk& operator=(const Chunk&) = delete;
+
+    // Declare move semantics
+    Chunk(Chunk&& other) noexcept;
+    Chunk& operator=(Chunk&& other) noexcept;
+
+    void generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight);
+
+    int verticesCount = 0;
+    int indiciesCount = 0;
+    uint32_t ssboIndex = -1;
+    VramAllocator* vramAllocator;
+    BufferAllocation chunkAllocation;
+
+    private:
+};
+#else
 class Chunk{
     public:
     Chunk();
@@ -27,17 +61,19 @@ class Chunk{
     int verticesCount = 0;
     private:
 };
+#endif
 
 Chunk create_chunk(glm::ivec3 chunkPosition);
-inline uint32_t create_vertex(int x, int y, int z, int TextureID, int Direction) {
+inline uint32_t create_vertex(int x, int y, int z, int TextureID, int Direction, int UVCoordinate) {
     /*
         x - 5 bits
-        y - 8 bits
+        y - 5 bits
         z - 5 bits
         TextureID - 8 bits
         Direction - 3 bits
+        UVCoordinate - 2bits
     */
-    return ((x & 0x1F) | ((y & 0xFF) << 5) | ((z & 0x1F) << 13) | ((TextureID & 0xFF) << 18) | ((Direction & 0x7) << 26));
+    return ((x & 0x1F) | ((y & 0x1F) << 5) | ((z & 0x1F) << 10) | ((TextureID & 0xFF) << 15) | ((Direction & 0x7) << 23) | ((UVCoordinate & 0x3) << 26));
 }
 
 
@@ -45,7 +81,7 @@ inline uint32_t create_vertex(int x, int y, int z, int TextureID, int Direction)
 class ChunkColumn{
     public:
     
-    ChunkColumn(glm::vec2 position);
+    ChunkColumn(glm::vec2 position, VramAllocator* vramAllocator);
     ~ChunkColumn();
 
     ChunkColumn(const ChunkColumn&) = delete;
@@ -57,8 +93,7 @@ class ChunkColumn{
     uint8_t Blocks[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE];
     Chunk chunks[CHUNK_COLUMN_HEIGHT];
     glm::vec2 position;
-
+    VramAllocator* vramAllocator;
 
     private:
-
 };

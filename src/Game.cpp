@@ -74,9 +74,7 @@ Game::Game() {
 
     stbi_set_flip_vertically_on_load(true);
 
-    std::cout << "Loading textures..." << std::endl;
-    world.loadTextures();
-    std::cout << "Textures loaded." << std::endl;
+    world.initialize();
     
 }
 

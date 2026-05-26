@@ -19,6 +19,22 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw)
 
+# ENet (Cross-platform build from source)
+FetchContent_Declare(
+  enet
+  GIT_REPOSITORY https://github.com/lsalzman/enet.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(enet)
+
+# GLM (Header-only)
+FetchContent_Declare(
+  glm
+  GIT_REPOSITORY https://github.com/g-truc/glm.git
+  GIT_TAG 1.0.1
+)
+FetchContent_MakeAvailable(glm)
+
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
@@ -34,6 +50,11 @@ add_subdirectory("deps/FastNoise2")
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "src/*.cpp" "src/*.c")
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 
+# Inject the project root path so the code can find textures/shaders reliably
+target_compile_definitions(${PROJECT_NAME} PRIVATE 
+    ROOT_DIR="${CMAKE_SOURCE_DIR}/"
+)
+
 # Tell the compiler where to find header files
 target_include_directories(${PROJECT_NAME} PRIVATE 
     include
@@ -43,21 +64,15 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
     glfw
+    enet
+    FastNoise
+    glm::glm
     OpenGL::GL
 )
 
-# Platform-specific linking
+# Platform-specific linking requirements
 if(WIN32)
-    # ENet for Windows using provided .lib files
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        target_link_libraries(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/enet-1.3.18/enet64.lib")
-    else()
-        target_link_libraries(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/enet-1.3.18/enet.lib")
-    endif()
-    
-    # ENet requirements on Windows
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 winmm)
 elseif(UNIX AND NOT APPLE)
-    # Use system enet on Linux
-    target_link_libraries(${PROJECT_NAME} PRIVATE dl enet FastNoise)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
 endif()

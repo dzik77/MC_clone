@@ -6,24 +6,40 @@
 #include <TextureManager.hpp>
 #include <FastNoise/FastNoise.h>
 #include <set>
+#include <VramAllocator.hpp>
+#include <Engine.hpp>
+#include <stack>
+
+constexpr int PREALLOCATE_CHUNKS = 20000;
 
 class World{
     public:
     
         World();
-        void loadTextures();
+        void initialize();
         void generateTerrain(ChunkColumn &chunkColumn);
         void loadChunks(glm::vec3 playerPosition);
         void render(Shader& shader);
         void clean();
         ~World();
-
-    private:
-
-        int renderDistance = 32;
-        std::vector<ChunkColumn> ChunkColumns;
-        std::set<std::pair<int, int>> loadedChunkPositions;
+        
+        private:
+        
+        void loadTextures();
         TextureArray textureArray;
+        
+        int renderDistance = 32;
+        VramAllocator vramAllocator;
+        GLuint globalVAO;
+        std::vector<ChunkColumn> ChunkColumns;
+        std::stack<int> freeChunkPositionIndices;
+        std::set<std::pair<int, int>> loadedChunkPositions;
+        GLuint chunkSSBO;
+        ChunkPosition* ssboData;
+        GLuint indirectCommandBuffer;
+        DrawElementsIndirectCommand* mappedIndirectCommands;
+        size_t indirectCommandBufferSize;
+
         FastNoise::SmartNode<FastNoise::Simplex> noise;
 
 };

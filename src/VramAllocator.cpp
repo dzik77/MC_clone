@@ -8,11 +8,11 @@ VramAllocator::VramAllocator(uint32_t MAX_VERTICES, uint32_t MAX_INDICES) {
     glCreateBuffers(1, &VBO);
     glCreateBuffers(1, &EBO);
 
-    glNamedBufferStorage(VBO, VBOSize, nullptr, accessFlags);
-    glNamedBufferStorage(EBO, EBOSize, nullptr, accessFlags);
+    glNamedBufferStorage(VBO, VBOSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(EBO, EBOSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
 
-    vertexData = (uint32_t*)glMapNamedBufferRange(VBO, 0, VBOSize, accessFlags);
-    indexData = (uint16_t*)glMapNamedBufferRange(EBO, 0, EBOSize, accessFlags);
+    //vertexData = (uint32_t*)glMapNamedBufferRange(VBO, 0, VBOSize, accessFlags);
+    //indexData = (uint16_t*)glMapNamedBufferRange(EBO, 0, EBOSize, accessFlags);
 
     freeVertexBlocks.insert({0, MAX_VERTICES});
     freeVertexBlocksOffset.insert({0, MAX_VERTICES});
@@ -23,14 +23,57 @@ VramAllocator::VramAllocator(uint32_t MAX_VERTICES, uint32_t MAX_INDICES) {
 
 VramAllocator::~VramAllocator(){
 
+    freeVertexBlocks.clear();
+    freeVertexBlocksOffset.clear();
+    freeIndexBlocks.clear();
+    freeIndexBlocksOffset.clear();
+
+    //vertexData = nullptr;
+    //indexData = nullptr;
+    VBO = EBO = 0;
+
+}
+
+void VramAllocator::initialize(uint32_t MAX_VERTICES, uint32_t MAX_INDICES) {
+    
+    VBOSize = MAX_VERTICES * sizeof(uint32_t);
+    EBOSize = MAX_INDICES * sizeof(uint16_t);
+
+    glCreateBuffers(1, &VBO);
+    glCreateBuffers(1, &EBO);
+
+    glNamedBufferStorage(VBO, VBOSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(EBO, EBOSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+
+    //vertexData = (uint32_t*)glMapNamedBufferRange(VBO, 0, VBOSize, accessFlags);
+    //indexData = (uint16_t*)glMapNamedBufferRange(EBO, 0, EBOSize, accessFlags);
+
+    freeVertexBlocks.insert({0, MAX_VERTICES});
+    freeVertexBlocksOffset.insert({0, MAX_VERTICES});
+    freeIndexBlocks.insert({0, MAX_INDICES});
+    freeIndexBlocksOffset.insert({0, MAX_INDICES});
+
+}
+
+void VramAllocator::clean(){
+
     glUnmapNamedBuffer(VBO);
     glUnmapNamedBuffer(EBO);
 
-    vertexData = nullptr;
-    indexData = nullptr;
+    //vertexData = nullptr;
+    //indexData = nullptr;
 
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
+
+    freeVertexBlocks.clear();
+    freeVertexBlocksOffset.clear();
+    freeIndexBlocks.clear();
+    freeIndexBlocksOffset.clear();
+
+    //vertexData = nullptr;
+    //indexData = nullptr;
+    VBO = EBO = 0;
 
 }
 
@@ -131,15 +174,22 @@ BufferAllocation VramAllocator::reallocate(const BufferAllocation &oldAllocation
 {
     BufferAllocation newAllocation = allocate(newVertexCount, newIndexCount);
 
+    /*
     std::memcpy(
         (void *)(vertexData + newAllocation.vertexBlocks), 
         (void *)(vertexData + oldAllocation.vertexBlocks), 
         std::min(oldAllocation.vertexCount, newAllocation.vertexCount) * sizeof(uint32_t));
-    std::memcpy(
-        (void *)(indexData + newAllocation.indexBlocks), 
-        (void *)(indexData + oldAllocation.indexBlocks), 
-        std::min(oldAllocation.indexCount, newAllocation.indexCount) * sizeof(uint16_t));
-
+        std::memcpy(
+            (void *)(indexData + newAllocation.indexBlocks), 
+            (void *)(indexData + oldAllocation.indexBlocks), 
+            std::min(oldAllocation.indexCount, newAllocation.indexCount) * sizeof(uint16_t));
+    */
+    
+    uint32_t vertexCopyCount = std::min(oldAllocation.vertexCount, newAllocation.vertexCount);
+    uint32_t indexCopyCount = std::min(oldAllocation.indexCount, newAllocation.indexCount);
+    glCopyNamedBufferSubData(VBO, VBO, oldAllocation.vertexBlocks * sizeof(uint32_t), newAllocation.vertexBlocks * sizeof(uint32_t), vertexCopyCount * sizeof(uint32_t));
+    glCopyNamedBufferSubData(EBO, EBO, oldAllocation.indexBlocks * sizeof(uint16_t), newAllocation.indexBlocks * sizeof(uint16_t), indexCopyCount * sizeof(uint16_t));
+    
     free(oldAllocation);
     
     return newAllocation;

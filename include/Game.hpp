@@ -14,6 +14,7 @@
 #include <stb_image.h>
 
 #define DEBUG
+//#define AZDO_RENDERING
 
 class Game{
     public:
@@ -25,8 +26,8 @@ class Game{
         Camera camera;
         GLFWwindow* window;
         World world;
-        const std::filesystem::path vertexShaderPath{"Shaders/vertex.glsl"};
-        const std::filesystem::path fragmentShaderPath{"Shaders/fragment.glsl"};
+        const std::filesystem::path vertexShaderPath{std::filesystem::path(ROOT_DIR) / "Shaders/vertex.glsl"};
+        const std::filesystem::path fragmentShaderPath{std::filesystem::path(ROOT_DIR) / "Shaders/fragment.glsl"};
 
         void processInput(float deltaTime);
         static void error_callback(int error, const char* description);

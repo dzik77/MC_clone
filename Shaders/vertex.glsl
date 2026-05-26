@@ -4,7 +4,14 @@ layout (location = 0) in uint packedData;
 out vec2 TexCoords;
 out float TexLayer;
 
-uniform mat4 model;
+struct ChunkPosition {
+    vec4 position;
+};
+
+layout(std430, binding = 0) readonly buffer ChunkPositions {
+    ChunkPosition positions[];
+};
+
 uniform mat4 view;
 uniform mat4 projection;
 
@@ -18,14 +25,17 @@ const vec2 UV_MAP[4] = vec2[4](
 void main() {
 
     uint x = packedData & 31u;
-    uint y = (packedData >> 5u) & 255u;
-    uint z = (packedData >> 13u) & 31u;
-    uint textureID = (packedData >> 18u) & 255u;
-    uint direction = (packedData >> 26u) & 7u;
+    uint y = (packedData >> 5u) & 31u;
+    uint z = (packedData >> 10u) & 31u;
+    uint textureID = (packedData >> 15u) & 255u;
+    uint direction = (packedData >> 23u) & 7u;
+    uint uvCoordinate = (packedData >> 26u) & 3u;
 
-    gl_Position = projection * view * model * vec4(float(x), float(y), float(z), 1.0);
+    vec3 finalPos = vec3(float(x), float(y), float(z)) + positions[gl_BaseInstance].position.xyz;
 
-    TexCoords = UV_MAP[gl_VertexID % 4];
+    gl_Position = projection * view * vec4(finalPos, 1.0);
+
+    TexCoords = UV_MAP[uvCoordinate];
 
     TexLayer = float(int(textureID)-1);
 }
