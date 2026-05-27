@@ -36,6 +36,7 @@ class World{
         std::vector<ChunkColumn> ChunkColumns;
         std::stack<int> freeChunkPositionIndices;
         std::stack<int> chunksToGenerateMesh;
+        std::stack<int> chunksGeneratedOnEdge;
         std::map<std::pair<int, int>, int> loadedChunkPositions;
         GLuint chunkSSBO;
         ChunkPosition* ssboData;

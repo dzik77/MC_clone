@@ -82,8 +82,52 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
 
 void World::generateMesh() {
 
+    std::stack<int> tempStack;
+    while(!chunksGeneratedOnEdge.empty()){
+        int idx = chunksGeneratedOnEdge.top();
+        auto& chunkColumn = ChunkColumns[idx];
+        chunksGeneratedOnEdge.pop();
+        uint8_t (*Blocks_Front)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        uint8_t (*Blocks_Back)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        uint8_t (*Blocks_Left)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        uint8_t (*Blocks_Right)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        auto it = loadedChunkPositions.find({chunkColumn.position.x-1, chunkColumn.position.y});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Left = ChunkColumns[it->second].Blocks;
+        }
+        it = loadedChunkPositions.find({chunkColumn.position.x+1, chunkColumn.position.y});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Right = ChunkColumns[it->second].Blocks;
+        }
+        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y+1});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Front = ChunkColumns[it->second].Blocks;
+        }
+        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y-1});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Back = ChunkColumns[it->second].Blocks;
+        }
+        if (Blocks_Front == nullptr || Blocks_Back == nullptr || Blocks_Left == nullptr || Blocks_Right == nullptr){
+            tempStack.push(idx);
+            continue;
+        }
+        for (int height = 0; height < CHUNK_COLUMN_HEIGHT; height++){
+            chunkColumn.chunks[height].generateMesh(
+                chunkColumn.Blocks, height,
+                Blocks_Front,
+                Blocks_Back,
+                Blocks_Left,
+                Blocks_Right
+            );
+        }
+    }
+    while(!tempStack.empty()){
+        chunksGeneratedOnEdge.push(tempStack.top());
+        tempStack.pop();
+    }
     while(!chunksToGenerateMesh.empty()){
-        auto& chunkColumn = ChunkColumns[chunksToGenerateMesh.top()];
+        int idx = chunksToGenerateMesh.top();
+        auto& chunkColumn = ChunkColumns[idx];
         chunksToGenerateMesh.pop();
         uint8_t (*Blocks_Front)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
         uint8_t (*Blocks_Back)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
@@ -104,6 +148,9 @@ void World::generateMesh() {
         it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y-1});
         if (it != loadedChunkPositions.end()){
             Blocks_Back = ChunkColumns[it->second].Blocks;
+        }
+        if (Blocks_Front == nullptr || Blocks_Back == nullptr || Blocks_Left == nullptr || Blocks_Right == nullptr){
+            chunksGeneratedOnEdge.push(idx);
         }
         for (int height = 0; height < CHUNK_COLUMN_HEIGHT; height++){
             chunkColumn.chunks[height].generateMesh(
