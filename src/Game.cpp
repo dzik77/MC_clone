@@ -124,6 +124,7 @@ void Game::run() {
         shader.setMat4("view", camera.getView());
 
         world.loadChunks(camera.getPosition());
+        world.generateMesh();
         world.render(shader);
 
         glfwSwapBuffers(window);

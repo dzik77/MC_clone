@@ -47,7 +47,12 @@ void Chunk::init(VramAllocator *vramAllocator){
     this->vramAllocator = vramAllocator;
 }
 
-void Chunk::generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight) {
+void Chunk::generateMesh(
+        uint8_t (*Blocks)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight,
+        uint8_t (*Blocks_Front)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
+        uint8_t (*Blocks_Back)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
+        uint8_t (*Blocks_Left)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
+        uint8_t (*Blocks_Right)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE])       {
     
     std::vector<uint32_t> vertices;
     std::vector<uint16_t> indicies;
@@ -58,7 +63,7 @@ void Chunk::generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN
         for (int y = 0; y < CHUNK_SIZE; y++){
             for (int z = 0; z < CHUNK_SIZE; z++){
                 if (Blocks[x][y + yOffset][z] == 0) continue;
-                if (x == 0 || Blocks[x-1][y + yOffset][z] == 0){ // LEFT
+                if ((x == 0 ? (Blocks_Left == nullptr || Blocks_Left[CHUNK_SIZE-1][y + yOffset][z] == 0) :  Blocks[x-1][y + yOffset][z] == 0)){ // LEFT
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 0));   // TL
                     vertices.emplace_back(create_vertex(x,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 1)); // TR
@@ -68,7 +73,7 @@ void Chunk::generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if (x == CHUNK_SIZE-1 || Blocks[x+1][y + yOffset][z] == 0){ // RIGHT
+                if ((x == CHUNK_SIZE-1 ? (Blocks_Right == nullptr || Blocks_Right[0][y + yOffset][z] == 0) : Blocks[x+1][y + yOffset][z] == 0)){ // RIGHT
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x+1,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 0)); // TL
                     vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 1));   // TR
@@ -78,7 +83,7 @@ void Chunk::generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if (y == 0 || Blocks[x][y-1 + yOffset][z] == 0){ // DOWN
+                if ((y == 0 ? (columnHeight == 0 || Blocks[x][y-1 + yOffset][z] == 0) : Blocks[x][y-1 + yOffset][z] == 0)){ // DOWN
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::DOWN, 0));   // TL
                     vertices.emplace_back(create_vertex(x+1,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::DOWN, 1)); // TR
@@ -88,7 +93,7 @@ void Chunk::generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if (y == CHUNK_SIZE-1 || Blocks[x][y+1 + yOffset][z] == 0){ // UP
+                if ((y == CHUNK_SIZE-1 ? (columnHeight == CHUNK_COLUMN_HEIGHT-1 || Blocks[x][y+1 + yOffset][z] == 0) : Blocks[x][y+1 + yOffset][z] == 0)){ // UP
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::UP, 0));     // TL
                     vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::UP, 1));   // TR
@@ -98,7 +103,7 @@ void Chunk::generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if (z == 0 || Blocks[x][y + yOffset][z-1] == 0){ // BACKWARD
+                if ((z == 0 ? (Blocks_Back == nullptr || Blocks_Back[x][y + yOffset][CHUNK_SIZE-1] == 0) : Blocks[x][y + yOffset][z-1] == 0)){ // BACKWARD
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 0)); // TL
                     vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 1));   // TR
@@ -108,7 +113,7 @@ void Chunk::generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if (z == CHUNK_SIZE-1 || Blocks[x][y + yOffset][z+1] == 0){ // FORWARD
+                if ((z == CHUNK_SIZE-1 ? (Blocks_Front == nullptr || Blocks_Front[x][y + yOffset][0] == 0) : Blocks[x][y + yOffset][z+1] == 0)){ // FORWARD
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 0)); // TL
                     vertices.emplace_back(create_vertex(x+1,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 1)); // TR

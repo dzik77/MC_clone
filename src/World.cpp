@@ -69,7 +69,6 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
         }
     }
     for (int i = 0; i < CHUNK_COLUMN_HEIGHT; i++){
-        chunkColumn.chunks[i].generateMesh(chunkColumn.Blocks, i);
         if (!freeChunkPositionIndices.empty()){
             chunkColumn.chunks[i].ssboIndex = freeChunkPositionIndices.top();
             freeChunkPositionIndices.pop();
@@ -79,6 +78,44 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
         }
     }
     //std::cout << "Terrain generated for chunk column at position: " << chunkColumn.position.x << ", " << chunkColumn.position.y << std::endl;
+}
+
+void World::generateMesh() {
+
+    while(!chunksToGenerateMesh.empty()){
+        auto& chunkColumn = ChunkColumns[chunksToGenerateMesh.top()];
+        chunksToGenerateMesh.pop();
+        uint8_t (*Blocks_Front)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        uint8_t (*Blocks_Back)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        uint8_t (*Blocks_Left)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        uint8_t (*Blocks_Right)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE] = nullptr;
+        auto it = loadedChunkPositions.find({chunkColumn.position.x-1, chunkColumn.position.y});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Left = ChunkColumns[it->second].Blocks;
+        }
+        it = loadedChunkPositions.find({chunkColumn.position.x+1, chunkColumn.position.y});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Right = ChunkColumns[it->second].Blocks;
+        }
+        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y+1});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Front = ChunkColumns[it->second].Blocks;
+        }
+        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y-1});
+        if (it != loadedChunkPositions.end()){
+            Blocks_Back = ChunkColumns[it->second].Blocks;
+        }
+        for (int height = 0; height < CHUNK_COLUMN_HEIGHT; height++){
+            chunkColumn.chunks[height].generateMesh(
+                chunkColumn.Blocks, height,
+                Blocks_Front,
+                Blocks_Back,
+                Blocks_Left,
+                Blocks_Right
+            );
+        }
+    }
+
 }
 
 void World::loadChunks(glm::vec3 playerPosition) {
@@ -106,11 +143,13 @@ void World::loadChunks(glm::vec3 playerPosition) {
                     loadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
                     ChunkColumns[idx] = ChunkColumn(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
                     generateTerrain(ChunkColumns[idx]);
-                    loadedChunkPositions.insert(std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z));
+                    loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = idx;
+                    chunksToGenerateMesh.push(idx);
                 } else {
                     ChunkColumns.emplace_back(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
                     generateTerrain(ChunkColumns.back());
-                    loadedChunkPositions.insert(std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z));
+                    loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = ChunkColumns.size()-1;
+                    chunksToGenerateMesh.push(ChunkColumns.size()-1);
                 }
             }
         }

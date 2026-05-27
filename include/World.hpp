@@ -9,6 +9,7 @@
 #include <VramAllocator.hpp>
 #include <Engine.hpp>
 #include <stack>
+#include <map>
 
 constexpr int PREALLOCATE_CHUNKS = 20000;
 
@@ -18,6 +19,7 @@ class World{
         World();
         void initialize();
         void generateTerrain(ChunkColumn &chunkColumn);
+        void generateMesh();
         void loadChunks(glm::vec3 playerPosition);
         void render(Shader& shader);
         void clean();
@@ -33,7 +35,8 @@ class World{
         GLuint globalVAO;
         std::vector<ChunkColumn> ChunkColumns;
         std::stack<int> freeChunkPositionIndices;
-        std::set<std::pair<int, int>> loadedChunkPositions;
+        std::stack<int> chunksToGenerateMesh;
+        std::map<std::pair<int, int>, int> loadedChunkPositions;
         GLuint chunkSSBO;
         ChunkPosition* ssboData;
         GLuint indirectCommandBuffer;
