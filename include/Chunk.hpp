@@ -30,9 +30,13 @@ class Chunk{
     Chunk(Chunk&& other) noexcept;
     Chunk& operator=(Chunk&& other) noexcept;
 
-    void generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight);
-
-    int verticesCount = 0;
+    void generateMesh(
+        uint8_t (*Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight,
+        uint8_t (*Blocks_Front)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
+        uint8_t (*Blocks_Back)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
+        uint8_t (*Blocks_Left)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
+        uint8_t (*Blocks_Right)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE]);   
+int verticesCount = 0;
     int indiciesCount = 0;
     uint32_t ssboIndex = -1;
     VramAllocator* vramAllocator;
