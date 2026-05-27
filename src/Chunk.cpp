@@ -129,7 +129,12 @@ void Chunk::generateMesh(
     indiciesCount = indicies.size();
     verticesCount = vertices.size();
 
-    chunkAllocation = (*vramAllocator).allocate(verticesCount, indiciesCount);
+    if (chunkAllocation.vertexCount < vertices.size() || chunkAllocation.vertexCount < indicies.size()){
+        if (chunkAllocation.vertexBlocks > 0 && chunkAllocation.indexBlocks > 0){
+            vramAllocator->free(chunkAllocation);
+        }
+        chunkAllocation = vramAllocator->allocate(verticesCount, indiciesCount);
+    }
     //std::memcpy(vramAllocator->getVertexData() + chunkAllocation.vertexBlocks, vertices.data(), verticesCount * sizeof(uint32_t));
     //std::memcpy(vramAllocator->getIndexData() + chunkAllocation.indexBlocks, indicies.data(), indiciesCount * sizeof(uint16_t));
     glNamedBufferSubData(vramAllocator->getVertexBufferID(), chunkAllocation.vertexBlocks * sizeof(uint32_t), verticesCount * sizeof(uint32_t), vertices.data());
