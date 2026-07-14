@@ -3,15 +3,15 @@
 #include <GLFW/glfw3.h>
 #include <enet/enet.h>
 #include <iostream>
-#include "Shaders.hpp"
+#include <Engine/Shaders.hpp>
 #include <filesystem>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <Camera.hpp>
-#include <World.hpp>
+#include <Engine/Camera.hpp>
+#include <WorldGeneration/World.hpp>
 #include <string>
-#include <stb_image.h>
+#include <Engine/stb_image.h>
 
 #define DEBUG
 //#define AZDO_RENDERING

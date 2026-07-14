@@ -1,8 +1,8 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <vector>
-#include <Direction.hpp>
-#include <VramAllocator.hpp>
+#include <Engine/Direction.hpp>
+#include <Engine/VramAllocator.hpp>
 #include <utility>
 
 struct ChunkPosition{
@@ -13,7 +13,6 @@ constexpr int CHUNK_SIZE = 16;
 // expand to 16 later, for now we can just use 4 to test the chunk column rendering
 constexpr int CHUNK_COLUMN_HEIGHT = 4;
 
-#ifndef NOT_AZDO_RENDERING
 class Chunk{
     public:
     Chunk();
@@ -44,28 +43,6 @@ int verticesCount = 0;
 
     private:
 };
-#else
-class Chunk{
-    public:
-    Chunk();
-    ~Chunk();
-
-    // Delete copy semantics to prevent accidental shallow copies
-    Chunk(const Chunk&) = delete;
-    Chunk& operator=(const Chunk&) = delete;
-
-    // Declare move semantics
-    Chunk(Chunk&& other) noexcept;
-    Chunk& operator=(Chunk&& other) noexcept;
-
-    void generateMesh(uint8_t (&Blocks)[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight);
-
-    unsigned int vao = 0, vbo = 0, ebo = 0;
-    int indiciesCount = 0;
-    int verticesCount = 0;
-    private:
-};
-#endif
 
 Chunk create_chunk(glm::ivec3 chunkPosition);
 inline uint32_t create_vertex(int x, int y, int z, int TextureID, int Direction, int UVCoordinate) {

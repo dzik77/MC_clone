@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <string>
 #include <glad/glad.h>
-#include <stb_image.h>
+#include <Engine/stb_image.h>
 
 #define fs std::filesystem
 

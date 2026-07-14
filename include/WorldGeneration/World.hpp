@@ -1,13 +1,13 @@
 #pragma once
 #include <glm/glm.hpp>
-#include <Chunk.hpp>
+#include <WorldGeneration/Chunk.hpp>
 #include <vector>
-#include <Shaders.hpp>
-#include <TextureManager.hpp>
+#include <Engine/Shaders.hpp>
+#include <Engine/TextureManager.hpp>
 #include <FastNoise/FastNoise.h>
 #include <set>
-#include <VramAllocator.hpp>
-#include <Engine.hpp>
+#include <Engine/VramAllocator.hpp>
+#include <Engine/Engine.hpp>
 #include <stack>
 #include <map>
 

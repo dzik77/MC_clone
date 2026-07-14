@@ -1,4 +1,4 @@
-#include "Camera.hpp"
+#include <Engine/Camera.hpp>
 
 void Camera::KeyboardInput(Direction direction, float deltaTime) {
     float Velocity = MovementSpeed * deltaTime;

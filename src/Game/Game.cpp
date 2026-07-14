@@ -1,4 +1,4 @@
-#include "Game.hpp"
+#include <Game/Game.hpp>
 
 Game::Game() {
     if (enet_initialize() != 0) {

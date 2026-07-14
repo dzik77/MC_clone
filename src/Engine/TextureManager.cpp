@@ -1,4 +1,4 @@
-#include "TextureManager.hpp"
+#include <Engine/TextureManager.hpp>
 #include <cmath>
 
 void TextureArray::createTextureArray(const std::vector<fs::path> texturePaths, int tileWidth, int tileHeight) {

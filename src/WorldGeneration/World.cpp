@@ -1,4 +1,4 @@
-#include "World.hpp"
+#include <WorldGeneration/World.hpp>
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
@@ -14,12 +14,13 @@ const std::vector<std::filesystem::path> texturePaths = {
 World::World() {
 
     noise = FastNoise::New<FastNoise::Simplex>();
+    noise->SetScale(1000.f);
 
 }
 
 void World::initialize() {
 
-    vramAllocator.initialize(60'000'000, 100'000'000);
+    vramAllocator.initialize(140'000'000, 250'000'000);
 
     glCreateVertexArrays(1, &globalVAO);
 
@@ -62,11 +63,15 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
     noise->GenUniformGrid2D(chunkBuffer.data(), chunkColumn.position.x * CHUNK_SIZE, chunkColumn.position.y * CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, 1.f, 1.f, 67);
     for (int x = 0; x < CHUNK_SIZE; x++){
         for (int z = 0; z < CHUNK_SIZE; z++){
-            int height = std::max(int(floor((chunkBuffer[x + z * CHUNK_SIZE] + 1.f) / 2.f * (float)CHUNK_SIZE) * (float)CHUNK_COLUMN_HEIGHT),1);
+            float normalizedNoise = (chunkBuffer[x + z * CHUNK_SIZE] + 1.f) / 2.f;
+            float maxHeight = (float)CHUNK_COLUMN_HEIGHT * (float)CHUNK_SIZE;
+            //std::cout << normalizedNoise * maxHeight << " ";
+            int height = std::max(int(floor(normalizedNoise * maxHeight)),1);
             for (int y = 0; y < height; y++){
                 chunkColumn.Blocks[x][y][z] = 4;
             }
         }
+        //std::cout << std::endl;
     }
     for (int i = 0; i < CHUNK_COLUMN_HEIGHT; i++){
         if (!freeChunkPositionIndices.empty()){
@@ -215,8 +220,6 @@ void World::loadChunks(glm::vec3 playerPosition) {
 
 void World::render(Shader& shader) {
 
-    #ifndef NOT_AZDO_RENDERING
-
     static bool firstRender = true;
 
     std::vector<DrawElementsIndirectCommand> drawCommands;
@@ -266,20 +269,6 @@ void World::render(Shader& shader) {
         drawCommands.size(), 
         0
     );
-
-    #else
-    shader.use();
-    glBindTextureUnit(0, textureArray.texture); 
-    for (int i = 0; i < ChunkColumns.size(); i++){
-        for (int j = 0; j < CHUNK_COLUMN_HEIGHT; j++){
-            if (ChunkColumns[i].chunks[j].vao == 0 || ChunkColumns[i].chunks[j].indiciesCount == 0) continue;
-            glm::mat4 model = glm::translate(glm::mat4(1.f), glm::vec3(ChunkColumns[i].position.x * CHUNK_SIZE, j * CHUNK_SIZE, ChunkColumns[i].position.y * CHUNK_SIZE));
-            shader.setMat4("model", model);
-            glBindVertexArray(ChunkColumns[i].chunks[j].vao);
-            glDrawElements(GL_TRIANGLES, ChunkColumns[i].chunks[j].indiciesCount, GL_UNSIGNED_SHORT, 0);
-        }
-    }
-    #endif
 
 }
 
