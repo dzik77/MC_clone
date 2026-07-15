@@ -26,7 +26,7 @@ class Camera{
     private:
 
         float 
-            MovementSpeed = 20.5f,
+            MovementSpeed = 200.5f,
             MouseSensivity = 0.1f,
             Yaw = -90.0f,
             Pitch = 0.0f;

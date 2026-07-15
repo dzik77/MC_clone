@@ -1,6 +1,6 @@
 #include <Engine/VramAllocator.hpp>
 
-VramAllocator::VramAllocator(uint32_t MAX_VERTICES, uint32_t MAX_INDICES) {
+VramAllocator::VramAllocator(std::size_t MAX_VERTICES, std::size_t MAX_INDICES) {
 
     VBOSize = MAX_VERTICES * sizeof(uint32_t);
     EBOSize = MAX_INDICES * sizeof(uint16_t);
@@ -34,7 +34,7 @@ VramAllocator::~VramAllocator(){
 
 }
 
-void VramAllocator::initialize(uint32_t MAX_VERTICES, uint32_t MAX_INDICES) {
+void VramAllocator::initialize(std::size_t MAX_VERTICES, std::size_t MAX_INDICES) {
     
     VBOSize = MAX_VERTICES * sizeof(uint32_t);
     EBOSize = MAX_INDICES * sizeof(uint16_t);
@@ -77,7 +77,7 @@ void VramAllocator::clean(){
 
 }
 
-BufferAllocation VramAllocator::allocate(uint32_t vertexCount, uint32_t indexCount) {
+BufferAllocation VramAllocator::allocate(std::size_t vertexCount, std::size_t indexCount) {
     vertexCount += VERTEX_FAT_ALLOCATION;
     indexCount += INDEX_FAT_ALLOCATION;
     BufferAllocation allocation = {0, 0, vertexCount, indexCount};
@@ -170,7 +170,7 @@ void VramAllocator::free(const BufferAllocation &allocation) {
     freeIndexBlocksOffset.insert(indexBlock);
 }
 
-BufferAllocation VramAllocator::reallocate(const BufferAllocation &oldAllocation, uint32_t newVertexCount, uint32_t newIndexCount)
+BufferAllocation VramAllocator::reallocate(const BufferAllocation &oldAllocation, std::size_t newVertexCount, std::size_t newIndexCount)
 {
     BufferAllocation newAllocation = allocate(newVertexCount, newIndexCount);
 
@@ -185,8 +185,8 @@ BufferAllocation VramAllocator::reallocate(const BufferAllocation &oldAllocation
             std::min(oldAllocation.indexCount, newAllocation.indexCount) * sizeof(uint16_t));
     */
     
-    uint32_t vertexCopyCount = std::min(oldAllocation.vertexCount, newAllocation.vertexCount);
-    uint32_t indexCopyCount = std::min(oldAllocation.indexCount, newAllocation.indexCount);
+    std::size_t vertexCopyCount = std::min(oldAllocation.vertexCount, newAllocation.vertexCount);
+    std::size_t indexCopyCount = std::min(oldAllocation.indexCount, newAllocation.indexCount);
     glCopyNamedBufferSubData(VBO, VBO, oldAllocation.vertexBlocks * sizeof(uint32_t), newAllocation.vertexBlocks * sizeof(uint32_t), vertexCopyCount * sizeof(uint32_t));
     glCopyNamedBufferSubData(EBO, EBO, oldAllocation.indexBlocks * sizeof(uint16_t), newAllocation.indexBlocks * sizeof(uint16_t), indexCopyCount * sizeof(uint16_t));
     

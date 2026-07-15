@@ -93,8 +93,7 @@ void Game::run() {
     std::cout << "Shaders loaded." << std::endl;
     shader.use();
     shader.setInt("textureArray", 0);
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 1000.f);
-    shader.setMat4("projection", projection);
+    projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 1000.f);
     shader.setMat4("model", glm::mat4(1.f));
 
     float lastFrame, currentFrame, deltaTime;
@@ -121,6 +120,7 @@ void Game::run() {
         glClearColor(0.2f,0.3f,0.3f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        shader.setMat4("projection", projection);
         shader.setMat4("view", camera.getView());
 
         world.loadChunks(camera.getPosition());
@@ -138,6 +138,10 @@ void Game::error_callback(int error, const char *description) {
 
 void Game::framebuffer_size_callback(GLFWwindow *window, int width, int height) {
     glViewport(0,0,width,height);
+    Game* game = static_cast<Game*>(glfwGetWindowUserPointer(window));
+    if (game && height > 0) {
+        game->projection = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 1000.f);
+    }
 }
 
 void Game::processInput(float deltaTime) {

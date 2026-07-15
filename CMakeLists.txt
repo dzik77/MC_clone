@@ -45,31 +45,42 @@ set(FASTNOISE2_TESTS OFF CACHE BOOL "Build tests" FORCE)
 
 add_subdirectory("deps/FastNoise2")
 
-# --- Project Setup ---
+# --- Project Targets ---
 
-# Add your source files to the executable
-file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "src/*.cpp" "src/*.c")
-add_executable(${PROJECT_NAME} ${SRC_FILES})
+# 1. Core Library (Shared)
+file(GLOB_RECURSE CORE_SRC CONFIGURE_DEPENDS "core/src/*.cpp" "core/src/*.c")
+# Check if any sources were found to avoid CMake errors if empty
+if(CORE_SRC)
+    add_library(core_lib STATIC ${CORE_SRC})
+    target_include_directories(core_lib PUBLIC core/include)
+    target_link_libraries(core_lib PUBLIC enet glm::glm FastNoise)
+else()
+    # Dummy target if empty so we don't break CMake before you move files
+    add_library(core_lib INTERFACE)
+    target_include_directories(core_lib INTERFACE core/include)
+    target_link_libraries(core_lib INTERFACE enet glm::glm FastNoise)
+endif()
 
-# Tell the compiler where to find header files
-target_include_directories(${PROJECT_NAME} PRIVATE 
-    include
-)
+# 2. Server Executable
+file(GLOB_RECURSE SERVER_SRC CONFIGURE_DEPENDS "server/src/*.cpp" "server/src/*.c")
+if(SERVER_SRC)
+    add_executable(server_app ${SERVER_SRC})
+    target_include_directories(server_app PRIVATE server/include)
+    target_link_libraries(server_app PRIVATE core_lib Threads::Threads)
+    if(WIN32)
+        target_link_libraries(server_app PRIVATE ws2_32 winmm)
+    endif()
+endif()
 
-# Link the libraries to your game
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
-    glfw
-    enet
-    FastNoise
-    glm::glm
-    OpenGL::GL
-    Threads::Threads
-)
-
-# Platform-specific linking requirements
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 winmm)
-elseif(UNIX AND NOT APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
+# 3. Client Executable
+file(GLOB_RECURSE CLIENT_SRC CONFIGURE_DEPENDS "client/src/*.cpp" "client/src/*.c")
+if(CLIENT_SRC)
+    add_executable(client_app ${CLIENT_SRC})
+    target_include_directories(client_app PRIVATE client/include)
+    target_link_libraries(client_app PRIVATE core_lib glfw OpenGL::GL Threads::Threads)
+    if(WIN32)
+        target_link_libraries(client_app PRIVATE ws2_32 winmm)
+    elseif(UNIX AND NOT APPLE)
+        target_link_libraries(client_app PRIVATE dl)
+    endif()
 endif()

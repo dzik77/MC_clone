@@ -10,8 +10,8 @@ struct ChunkPosition{
 };
 
 constexpr int CHUNK_SIZE = 16;
-// expand to 16 later, for now we can just use 4 to test the chunk column rendering
-constexpr int CHUNK_COLUMN_HEIGHT = 4;
+constexpr int CHUNK_COLUMN_HEIGHT = 16;
+constexpr int MAX_HEIGHT = CHUNK_COLUMN_HEIGHT * CHUNK_SIZE;
 
 class Chunk{
     public:

@@ -29,23 +29,23 @@ struct BufferAllocation {
     std::size_t indexCount;
 };
 
-constexpr uint32_t BLOCKS_FAT_ALLOCATION = 45;
-constexpr uint32_t VERTEX_FAT_ALLOCATION = BLOCKS_FAT_ALLOCATION * 6 * 4;
-constexpr uint32_t INDEX_FAT_ALLOCATION = BLOCKS_FAT_ALLOCATION * 6 * 4;
+constexpr std::size_t BLOCKS_FAT_ALLOCATION = 45;
+constexpr std::size_t VERTEX_FAT_ALLOCATION = BLOCKS_FAT_ALLOCATION * 6 * 4;
+constexpr std::size_t INDEX_FAT_ALLOCATION = BLOCKS_FAT_ALLOCATION * 6 * 4;
 
 class VramAllocator{
     public:
         VramAllocator() {}
-        VramAllocator(uint32_t MAX_VERTICES, uint32_t MAX_INDICES);
+        VramAllocator(std::size_t MAX_VERTICES, std::size_t MAX_INDICES);
         ~VramAllocator();
 
-        void initialize(uint32_t MAX_VERTICES, uint32_t MAX_INDICES);
+        void initialize(std::size_t MAX_VERTICES, std::size_t MAX_INDICES);
         void clean();
 
-        BufferAllocation allocate(uint32_t vertexCount, uint32_t indexCount);
+        BufferAllocation allocate(std::size_t vertexCount, std::size_t indexCount);
         void free(const BufferAllocation& allocation);
 
-        BufferAllocation reallocate(const BufferAllocation& oldAllocation, uint32_t newVertexCount, uint32_t newIndexCount);
+        BufferAllocation reallocate(const BufferAllocation& oldAllocation, std::size_t newVertexCount, std::size_t newIndexCount);
 
         GLuint getVertexBufferID() const { return VBO; }
         GLuint getIndexBufferID() const { return EBO; }
@@ -56,7 +56,7 @@ class VramAllocator{
 
         //uint32_t* vertexData;
         //uint16_t* indexData;
-        uint32_t VBOSize, EBOSize;
+        std::size_t VBOSize, EBOSize;
         GLuint VBO, EBO;
         //GLbitfield accessFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
         std::set<Block, CompareBlockBySize> freeVertexBlocks, freeIndexBlocks;

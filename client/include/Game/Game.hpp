@@ -26,6 +26,7 @@ class Game{
         Camera camera;
         GLFWwindow* window;
         World world;
+        glm::mat4 projection;
         const std::filesystem::path vertexShaderPath{"Shaders/vertex.glsl"};
         const std::filesystem::path fragmentShaderPath{"Shaders/fragment.glsl"};
 
@@ -33,5 +34,5 @@ class Game{
         static void error_callback(int error, const char* description);
         static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
         static void mouse_callback(GLFWwindow* Window, double xpos, double ypos);
-
+        
 };  
