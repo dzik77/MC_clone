@@ -74,6 +74,17 @@ Game::Game() {
 
     stbi_set_flip_vertically_on_load(true);
 
+    // network initialization
+    client = enet_host_create(nullptr, 1, 2, 0, 0);
+    if (client == nullptr) {
+        throw std::runtime_error("Failed to create ENet client host.");
+    }
+
+    // shaders
+    std::cout << "Loading shaders..." << std::endl;
+    shader.initialize(vertexShaderPath, fragmentShaderPath);
+    std::cout << "Shaders loaded." << std::endl;
+
     world.initialize();
     
 }
@@ -85,12 +96,25 @@ Game::~Game(){
     enet_deinitialize();
 }
 
+bool Game::connectToServer(std::string ip) {
+
+    enet_address_set_host(&address, ip.c_str());
+    address.port = 1234;
+
+    peer = enet_host_connect(client, &address, 2, 0);
+    if (peer == nullptr) {
+        std::cerr << "No available peers for initiating an ENet connection." << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 void Game::run() {
 
-    // shaders
-    std::cout << "Loading shaders..." << std::endl;
-    Shader shader(vertexShaderPath, fragmentShaderPath);
-    std::cout << "Shaders loaded." << std::endl;
+    
+
+    /*
     shader.use();
     shader.setInt("textureArray", 0);
     projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 1000.f);
@@ -130,6 +154,8 @@ void Game::run() {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+    */
+
 }
 
 void Game::error_callback(int error, const char *description) {

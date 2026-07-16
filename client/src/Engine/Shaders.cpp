@@ -3,6 +3,11 @@
 #include <stdexcept>
 #include <glm/gtc/type_ptr.hpp>
 
+Shader::Shader() : ID(0) {
+    // Default constructor does not initialize the shader program.
+    // Use the initialize method to set up the shader program later.
+}
+
 Shader::Shader(const std::filesystem::path& vertexShader, const std::filesystem::path& fragmentShader) {
     
     auto readFile = [](const std::filesystem::path& path) -> std::string {
@@ -68,6 +73,12 @@ Shader::Shader(const std::filesystem::path& vertexShader, const std::filesystem:
     glDeleteShader(vertex);
     glDeleteShader(fragment);
     std::cout << "Shader program linked successfully. ID: " << ID << std::endl;
+}
+
+void Shader::initialize(const std::filesystem::path& vertexShader, const std::filesystem::path& fragmentShader) {
+    // This function can be used to reinitialize the shader program if needed.
+    // For now, it simply calls the constructor logic again.
+    *this = Shader(vertexShader, fragmentShader);
 }
 
 void Shader::setBool(const std::string &name, bool value) const {

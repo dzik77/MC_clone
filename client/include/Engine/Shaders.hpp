@@ -10,7 +10,9 @@
 class Shader {
     public:
 
+        Shader();
         Shader(const std::filesystem::path& vertexShader, const std::filesystem::path& fragmentShader);
+        void initialize(const std::filesystem::path& vertexShader, const std::filesystem::path& fragmentShader);
         void use() const {
             glUseProgram(ID);
         }

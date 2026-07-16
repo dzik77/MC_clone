@@ -20,6 +20,7 @@ class Game{
     public:
         Game();
         ~Game();
+        bool connectToServer(std::string ip);
         void run();
     private:
 
@@ -29,6 +30,12 @@ class Game{
         glm::mat4 projection;
         const std::filesystem::path vertexShaderPath{"Shaders/vertex.glsl"};
         const std::filesystem::path fragmentShaderPath{"Shaders/fragment.glsl"};
+        Shader shader;
+
+        // networking
+        ENetHost* client;
+        ENetAddress address;
+        ENetPeer* peer;
 
         void processInput(float deltaTime);
         static void error_callback(int error, const char* description);
