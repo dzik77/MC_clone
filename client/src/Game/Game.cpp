@@ -107,12 +107,29 @@ bool Game::connectToServer(std::string ip) {
         return false;
     }
 
-    return true;
+    std::cout << "Attempting to connect to server at " << ip << ":" << address.port << "..." << std::endl;
+
+    ENetEvent event;
+    // Wait up to 5 seconds for the connection attempt to succeed
+    if (enet_host_service(client, &event, 5000) > 0 &&
+        event.type == ENET_EVENT_TYPE_CONNECT)
+    {
+        std::cout << "Successfully connected to server at " << ip << ":" << address.port << std::endl;
+        enet_host_flush(client); // Ensure all packets are sent (3 step handshake)
+        return true;
+    }
+    else
+    {
+        // Connection failed or timed out
+        enet_peer_reset(peer);
+        std::cout << "Failed to connect to server at " << ip << ":" << address.port << std::endl;
+        return false;
+    }
 }
 
 void Game::run() {
 
-    
+
 
     /*
     shader.use();

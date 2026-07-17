@@ -1,0 +1,7 @@
+GLFW Window created successfully.
+OpenGL 4.6 initialized.
+Renderer: AMD Ryzen 9 9900X 12-Core Processor (radeonsi, raphael_mendocino, LLVM 20.1.8, DRM 3.64, 6.17.0-40-generic)
+Vendor: AMD
+Loading shaders...
+Shader Loading Error: Failed to open shader file: Shaders/vertex.glsl
+Fatal Error during startup: Failed to open shader file: Shaders/vertex.glsl

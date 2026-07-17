@@ -1,7 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <WorldGeneration/Chunk.hpp>
-#include <WorldGeneration/TerrainSpline.hpp>
 #include <vector>
 #include <Engine/Shaders.hpp>
 #include <Engine/TextureManager.hpp>
@@ -32,7 +31,6 @@ class World{
         TextureArray textureArray;
         
         int renderDistance = 32;
-        int seed = 67;
         VramAllocator vramAllocator;
         GLuint globalVAO;
         std::vector<ChunkColumn> ChunkColumns;
@@ -45,15 +43,5 @@ class World{
         GLuint indirectCommandBuffer;
         DrawElementsIndirectCommand* mappedIndirectCommands;
         size_t indirectCommandBufferSize;
-
-        // Noise generator for terrain generation
-        FastNoise::SmartNode<FastNoise::Simplex> continentalness, erosion, peaksAndValleys;
-        FastNoise::SmartNode<FastNoise::FractalFBm> erosionFractal;
-        FastNoise::SmartNode<FastNoise::FractalFBm> peaksAndValleysFractal;
-
-        // Terrain spline for height evaluation
-        TerrainSpline continentalnessSpline;
-        TerrainSpline erosionSpline;
-        TerrainSpline peaksAndValleysSpline;
 
 };

@@ -1,6 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <vector>
+#include <WorldConfig.hpp>
 #include <Engine/Direction.hpp>
 #include <Engine/VramAllocator.hpp>
 #include <utility>
@@ -9,9 +10,6 @@ struct ChunkPosition{
     glm::vec4 position;
 };
 
-constexpr int CHUNK_SIZE = 16;
-constexpr int CHUNK_COLUMN_HEIGHT = 16;
-constexpr int MAX_HEIGHT = CHUNK_COLUMN_HEIGHT * CHUNK_SIZE;
 
 class Chunk{
     public:
@@ -30,11 +28,11 @@ class Chunk{
     Chunk& operator=(Chunk&& other) noexcept;
 
     void generateMesh(
-        uint8_t (*Blocks)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight,
-        uint8_t (*Blocks_Front)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
-        uint8_t (*Blocks_Back)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
-        uint8_t (*Blocks_Left)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
-        uint8_t (*Blocks_Right)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE]);   
+        uint8_t (*Blocks)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE], int columnHeight,
+        uint8_t (*Blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        uint8_t (*Blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        uint8_t (*Blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        uint8_t (*Blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE]);   
 int verticesCount = 0;
     int indiciesCount = 0;
     uint32_t ssboIndex = -1;
@@ -71,8 +69,8 @@ class ChunkColumn{
     ChunkColumn(ChunkColumn&& other) noexcept;
     ChunkColumn& operator=(ChunkColumn&& other) noexcept;
 
-    uint8_t Blocks[CHUNK_SIZE][CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE];
-    Chunk chunks[CHUNK_COLUMN_HEIGHT];
+    uint8_t Blocks[WorldConfig::CHUNK_SIZE][WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE];
+    Chunk chunks[WorldConfig::CHUNK_COLUMN_HEIGHT];
     glm::vec2 position;
     VramAllocator* vramAllocator;
 

@@ -47,22 +47,22 @@ void Chunk::init(VramAllocator *vramAllocator){
 }
 
 void Chunk::generateMesh(
-        uint8_t (*Blocks)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE], int columnHeight,
-        uint8_t (*Blocks_Front)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
-        uint8_t (*Blocks_Back)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
-        uint8_t (*Blocks_Left)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE],
-        uint8_t (*Blocks_Right)[CHUNK_SIZE * CHUNK_COLUMN_HEIGHT][CHUNK_SIZE])       {
+        uint8_t (*Blocks)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE], int columnHeight,
+        uint8_t (*Blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        uint8_t (*Blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        uint8_t (*Blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        uint8_t (*Blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE])       {
     
     std::vector<uint32_t> vertices;
     std::vector<uint16_t> indicies;
     
-    int yOffset = columnHeight * CHUNK_SIZE;
+    int yOffset = columnHeight * WorldConfig::CHUNK_SIZE;
     
-    for (int x = 0; x < CHUNK_SIZE; x++){
-        for (int y = 0; y < CHUNK_SIZE; y++){
-            for (int z = 0; z < CHUNK_SIZE; z++){
+    for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
+        for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++){
+            for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
                 if (Blocks[x][y + yOffset][z] == 0) continue;
-                if ((x == 0 ? (Blocks_Left == nullptr || Blocks_Left[CHUNK_SIZE-1][y + yOffset][z] == 0) :  Blocks[x-1][y + yOffset][z] == 0)){ // LEFT
+                if ((x == 0 ? (Blocks_Left == nullptr || Blocks_Left[WorldConfig::CHUNK_SIZE-1][y + yOffset][z] == 0) :  Blocks[x-1][y + yOffset][z] == 0)){ // LEFT
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 0));   // TL
                     vertices.emplace_back(create_vertex(x,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 1)); // TR
@@ -72,7 +72,7 @@ void Chunk::generateMesh(
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((x == CHUNK_SIZE-1 ? (Blocks_Right == nullptr || Blocks_Right[0][y + yOffset][z] == 0) : Blocks[x+1][y + yOffset][z] == 0)){ // RIGHT
+                if ((x == WorldConfig::CHUNK_SIZE-1 ? (Blocks_Right == nullptr || Blocks_Right[0][y + yOffset][z] == 0) : Blocks[x+1][y + yOffset][z] == 0)){ // RIGHT
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x+1,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 0)); // TL
                     vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 1));   // TR
@@ -92,7 +92,7 @@ void Chunk::generateMesh(
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((y == CHUNK_SIZE-1 ? (columnHeight == CHUNK_COLUMN_HEIGHT-1 || Blocks[x][y+1 + yOffset][z] == 0) : Blocks[x][y+1 + yOffset][z] == 0)){ // UP
+                if ((y == WorldConfig::CHUNK_SIZE-1 ? (columnHeight == WorldConfig::CHUNK_COLUMN_HEIGHT-1 || Blocks[x][y+1 + yOffset][z] == 0) : Blocks[x][y+1 + yOffset][z] == 0)){ // UP
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::UP, 0));     // TL
                     vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::UP, 1));   // TR
@@ -102,7 +102,7 @@ void Chunk::generateMesh(
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((z == 0 ? (Blocks_Back == nullptr || Blocks_Back[x][y + yOffset][CHUNK_SIZE-1] == 0) : Blocks[x][y + yOffset][z-1] == 0)){ // BACKWARD
+                if ((z == 0 ? (Blocks_Back == nullptr || Blocks_Back[x][y + yOffset][WorldConfig::CHUNK_SIZE-1] == 0) : Blocks[x][y + yOffset][z-1] == 0)){ // BACKWARD
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 0)); // TL
                     vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 1));   // TR
@@ -112,7 +112,7 @@ void Chunk::generateMesh(
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((z == CHUNK_SIZE-1 ? (Blocks_Front == nullptr || Blocks_Front[x][y + yOffset][0] == 0) : Blocks[x][y + yOffset][z+1] == 0)){ // FORWARD
+                if ((z == WorldConfig::CHUNK_SIZE-1 ? (Blocks_Front == nullptr || Blocks_Front[x][y + yOffset][0] == 0) : Blocks[x][y + yOffset][z+1] == 0)){ // FORWARD
                     uint32_t idx = vertices.size();
                     vertices.emplace_back(create_vertex(x,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 0)); // TL
                     vertices.emplace_back(create_vertex(x+1,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 1)); // TR
@@ -145,7 +145,7 @@ ChunkColumn::ChunkColumn(glm::vec2 position, VramAllocator* vramAllocator)
     : position(position), vramAllocator(vramAllocator)
 {
     std::memset(Blocks, 0, sizeof(Blocks));
-    for (int i = 0; i < CHUNK_COLUMN_HEIGHT; i++) {
+    for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
         chunks[i].init(vramAllocator);
     }
 }
@@ -158,7 +158,7 @@ ChunkColumn::ChunkColumn(ChunkColumn &&other) noexcept
     : position(other.position) 
 {
     std::memcpy(Blocks, other.Blocks, sizeof(Blocks));
-    for (int i = 0; i < CHUNK_COLUMN_HEIGHT; i++) {
+    for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
         chunks[i] = std::move(other.chunks[i]);
     }
 }
@@ -168,7 +168,7 @@ ChunkColumn &ChunkColumn::operator=(ChunkColumn &&other) noexcept
     if (this != &other) {
         position = other.position;
         std::memcpy(Blocks, other.Blocks, sizeof(Blocks));
-        for (int i = 0; i < CHUNK_COLUMN_HEIGHT; i++) {
+        for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
             chunks[i] = std::move(other.chunks[i]);
         }
     }
