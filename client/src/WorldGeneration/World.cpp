@@ -61,7 +61,16 @@ void World::loadTextures() {
 void World::generateTerrain(ChunkColumn &chunkColumn) {
 
     // load from server TODO:
+    // i guess for now just auto wait for the chunk
 
+    /*
+    RequestChunkPacket requestPacket;
+    requestPacket.chunkColumnX = chunkColumn.position.x;
+    requestPacket.chunkColumnZ = chunkColumn.position.y;
+    ENetPacket *packet = enet_packet_create(&requestPacket, sizeof(RequestChunkPacket), ENET_PACKET_FLAG_RELIABLE);
+    enet_peer_
+    */
+    
     // Assign SSBO indices to the chunks in the column
     for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++){
         if (!freeChunkPositionIndices.empty()){

@@ -50,7 +50,7 @@ World::World() {
 
 }
 
-void World::generateTerrain(ChunkColumnPacket* chunkColumnPacket, glm::ivec2 chunkColumnPosition) {
+void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket) {
 
     // Generate noise values for the chunk column (SIMD optimized)
     std::vector<float> continentalnessBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), erosionBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), peaksAndValleysBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), chunkBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE);
@@ -61,6 +61,11 @@ void World::generateTerrain(ChunkColumnPacket* chunkColumnPacket, glm::ivec2 chu
     // Combine the noise values to determine the final height of each column in the chunk
     for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
         for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
+            for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++){
+                chunkColumnPacket[y].x = chunkColumnPosition.x;
+                chunkColumnPacket[y].z = chunkColumnPosition.y;
+                chunkColumnPacket[y].y = y;
+            }
             float continentalnessValue = continentalnessSpline.evaluateHeight(continentalnessBuffer[z * WorldConfig::CHUNK_SIZE + x]);
             float erosionValue = erosionSpline.evaluateHeight(erosionBuffer[z * WorldConfig::CHUNK_SIZE + x]);
             float peaksAndValleysValue = peaksAndValleysSpline.evaluateHeight(peaksAndValleysBuffer[z * WorldConfig::CHUNK_SIZE + x]);
@@ -68,7 +73,7 @@ void World::generateTerrain(ChunkColumnPacket* chunkColumnPacket, glm::ivec2 chu
             int height = continentalnessValue + (erosionValue * peaksAndValleysValue);
             height = std::clamp(height, 1, WorldConfig::MAX_HEIGHT - 1);
             for (int y = 0; y < height; y++){
-                chunkColumnPacket->chunkColumnBlocks[WorldConfig::CHUNK_SIZE * (WorldConfig::CHUNK_SIZE * x + y) + z] = 4;
+                chunkColumnPacket[y].chunkColumnBlocks[z * WorldConfig::CHUNK_SIZE + x] = 4;
             }
             //chunkColumn.Blocks[x][0][z] = 1;
             //chunkColumn.Blocks[x][63][z] = 2;

@@ -1,16 +1,17 @@
 #pragma once
-#include <ChunkColumnPacket.hpp>
+
 #include <FastNoise/FastNoise.h>
 #include <TerrainSpline.hpp>
 #include <WorldConfig.hpp>
 #include <glm/glm.hpp>
+#include <PacketType.hpp>
 
 class World {
     public:
 
         World();
         ~World();
-        void generateTerrain(ChunkColumnPacket* chunkColumnPacket, glm::ivec2 chunkColumnPosition);
+        void generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkPackets);
 
     private:
 

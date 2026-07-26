@@ -8,6 +8,17 @@
 #include <queue>
 #include <string>
 #include <World.hpp>
+#include <PacketType.hpp>
+
+struct ChunkToGenerate {
+    int x;
+    int z;
+    ENetPeer* peer;
+};
+struct ChunkToSend {
+    ChunkPacket chunkPacket;
+    ENetPeer* peer;
+};
 
 class Server{
     public:
@@ -23,6 +34,7 @@ class Server{
         // networking
         ENetHost* server;
         ENetAddress address;
+        void handlePacket(ENetEvent& event);
 
         // Console input handling
 
@@ -33,6 +45,15 @@ class Server{
         void consoleInput();
 
         // World generation
+        std::thread chunkGenerationThread;
         World world;
+
+        std::queue<ChunkToGenerate> chunksToGenerate;
+        std::mutex chunksToGenerateMutex;
+
+        std::queue<ChunkToSend> chunksToSend;
+        std::mutex chunksToSendMutex;
+
+        void generateChunks();
 
 };

@@ -1,4 +1,4 @@
-#include "WorldGeneration/TerrainSpline.hpp"
+#include "TerrainSpline.hpp"
 #include <algorithm>
 
 TerrainSpline::TerrainSpline() {

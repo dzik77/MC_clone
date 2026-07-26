@@ -26,6 +26,7 @@ void Server::run() {
     
     running = true;
     consoleThread = std::thread(&Server::consoleInput, this);
+    chunkGenerationThread = std::thread(&Server::generateChunks, this);
 
     while(running) {
 
@@ -39,7 +40,7 @@ void Server::run() {
                     event.peer->data = (void*)"Player 1";
                     break;
                 case ENET_EVENT_TYPE_RECEIVE:
-                    enet_packet_destroy(event.packet);
+                    handlePacket(event);
                     break;
                 case ENET_EVENT_TYPE_DISCONNECT:
                     std::cout << (char *)event.peer->data << " disconnected." << std::endl;
@@ -47,6 +48,17 @@ void Server::run() {
                     break;
                 case ENET_EVENT_TYPE_NONE:
                     break;
+            }
+        }
+
+        // Chunk sending
+        {
+            std::lock_guard<std::mutex> lock(chunksToSendMutex);
+            while (!chunksToSend.empty()) {
+                ChunkToSend& chunkToSend = chunksToSend.front();
+                ENetPacket* packet = enet_packet_create(&chunkToSend.chunkPacket, sizeof(ChunkPacket), ENET_PACKET_FLAG_RELIABLE);
+                enet_peer_send(chunkToSend.peer, 0, packet);
+                chunksToSend.pop();
             }
         }
 
@@ -73,6 +85,60 @@ void Server::run() {
     }
 
     consoleThread.detach();
+
+}
+
+void Server::handlePacket(ENetEvent& event) {
+    
+    PacketType packetType = static_cast<PacketType>(event.packet->data[0]);
+    switch(packetType) {
+        case PacketType::RequestChunk: {
+
+            RequestChunkPacket* requestChunkPacket = reinterpret_cast<RequestChunkPacket*>(event.packet->data);
+            std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
+            chunksToGenerate.push({requestChunkPacket->chunkColumnX, requestChunkPacket->chunkColumnZ, event.peer});
+    
+            break;
+        }
+        default:
+        
+            break;
+    }
+
+    enet_packet_destroy(event.packet);
+}
+
+void Server::generateChunks() {
+
+    while (running) {
+
+        ChunkToGenerate chunkToGenerate;
+        bool hasChunkToGenerate = false;
+        {
+            std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
+            if (!chunksToGenerate.empty()) {
+                chunkToGenerate = chunksToGenerate.front();
+                chunksToGenerate.pop();
+                hasChunkToGenerate = true;
+            }
+        }
+
+        if (!hasChunkToGenerate){
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+
+        ChunkPacket chunkPackets[WorldConfig::CHUNK_COLUMN_HEIGHT];
+        world.generateTerrain(glm::ivec2(chunkToGenerate.x, chunkToGenerate.z), chunkPackets);
+
+        {
+            std::lock_guard<std::mutex> lock(chunksToSendMutex);
+            for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
+                chunksToSend.push({chunkPackets[i], chunkToGenerate.peer});
+            }
+        }
+
+    }
 
 }
 

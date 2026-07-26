@@ -131,7 +131,7 @@ void Game::run() {
 
 
 
-    /*
+    
     shader.use();
     shader.setInt("textureArray", 0);
     projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 1000.f);
@@ -171,7 +171,7 @@ void Game::run() {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-    */
+    
 
 }
 

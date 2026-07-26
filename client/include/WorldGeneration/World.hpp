@@ -11,6 +11,9 @@
 #include <stack>
 #include <map>
 
+#include <enet/enet.h>
+#include <PacketType.hpp>
+
 constexpr int PREALLOCATE_CHUNKS = 150000;
 
 class World{
