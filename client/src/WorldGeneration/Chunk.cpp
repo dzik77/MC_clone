@@ -47,11 +47,11 @@ void Chunk::init(VramAllocator *vramAllocator){
 }
 
 void Chunk::generateMesh(
-        uint8_t (*Blocks)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE], int columnHeight,
-        uint8_t (*Blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
-        uint8_t (*Blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
-        uint8_t (*Blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
-        uint8_t (*Blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE])       {
+        Block (*blocks)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE], int columnHeight,
+        Block (*blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE])       {
     
     std::vector<uint32_t> vertices;
     std::vector<uint16_t> indicies;
@@ -61,63 +61,63 @@ void Chunk::generateMesh(
     for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
         for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++){
             for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
-                if (Blocks[x][y + yOffset][z] == 0) continue;
-                if ((x == 0 ? (Blocks_Left == nullptr || Blocks_Left[WorldConfig::CHUNK_SIZE-1][y + yOffset][z] == 0) :  Blocks[x-1][y + yOffset][z] == 0)){ // LEFT
+                if (blocks[x][y + yOffset][z] == Block::AIR) continue;
+                if ((x == 0 ? (blocks_Left == nullptr || blocks_Left[WorldConfig::CHUNK_SIZE-1][y + yOffset][z] == Block::AIR) :  blocks[x-1][y + yOffset][z] == Block::AIR)){ // LEFT
                     uint32_t idx = vertices.size();
-                    vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 0));   // TL
-                    vertices.emplace_back(create_vertex(x,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 1)); // TR
-                    vertices.emplace_back(create_vertex(x,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 2));   // BR
-                    vertices.emplace_back(create_vertex(x,y,z,Blocks[x][y + yOffset][z], (int)Direction::LEFT, 3));     // BL
+                    vertices.emplace_back(create_vertex(x,y+1,z,getTextureID(blocks[x][y + yOffset][z], Direction::LEFT), (int)Direction::LEFT, 0));   // TL
+                    vertices.emplace_back(create_vertex(x,y+1,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::LEFT), (int)Direction::LEFT, 1)); // TR
+                    vertices.emplace_back(create_vertex(x,y,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::LEFT), (int)Direction::LEFT, 2));   // BR
+                    vertices.emplace_back(create_vertex(x,y,z,getTextureID(blocks[x][y + yOffset][z], Direction::LEFT), (int)Direction::LEFT, 3));     // BL
                     
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((x == WorldConfig::CHUNK_SIZE-1 ? (Blocks_Right == nullptr || Blocks_Right[0][y + yOffset][z] == 0) : Blocks[x+1][y + yOffset][z] == 0)){ // RIGHT
+                if ((x == WorldConfig::CHUNK_SIZE-1 ? (blocks_Right == nullptr || blocks_Right[0][y + yOffset][z] == Block::AIR) : blocks[x+1][y + yOffset][z] == Block::AIR)){ // RIGHT
                     uint32_t idx = vertices.size();
-                    vertices.emplace_back(create_vertex(x+1,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 0)); // TL
-                    vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 1));   // TR
-                    vertices.emplace_back(create_vertex(x+1,y,z,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 2));     // BR
-                    vertices.emplace_back(create_vertex(x+1,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::RIGHT, 3));   // BL
+                    vertices.emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::RIGHT), (int)Direction::RIGHT, 0)); // TL
+                    vertices.emplace_back(create_vertex(x+1,y+1,z,getTextureID(blocks[x][y + yOffset][z], Direction::RIGHT), (int)Direction::RIGHT, 1));   // TR
+                    vertices.emplace_back(create_vertex(x+1,y,z,getTextureID(blocks[x][y + yOffset][z], Direction::RIGHT), (int)Direction::RIGHT, 2));     // BR
+                    vertices.emplace_back(create_vertex(x+1,y,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::RIGHT), (int)Direction::RIGHT, 3));   // BL
                     
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((y == 0 ? (columnHeight == 0 || Blocks[x][y-1 + yOffset][z] == 0) : Blocks[x][y-1 + yOffset][z] == 0)){ // DOWN
+                if ((y == 0 ? (columnHeight == 0 || blocks[x][y-1 + yOffset][z] == Block::AIR) : blocks[x][y-1 + yOffset][z] == Block::AIR)){ // DOWN
                     uint32_t idx = vertices.size();
-                    vertices.emplace_back(create_vertex(x,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::DOWN, 0));   // TL
-                    vertices.emplace_back(create_vertex(x+1,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::DOWN, 1)); // TR
-                    vertices.emplace_back(create_vertex(x+1,y,z,Blocks[x][y + yOffset][z], (int)Direction::DOWN, 2));   // BR
-                    vertices.emplace_back(create_vertex(x,y,z,Blocks[x][y + yOffset][z], (int)Direction::DOWN, 3));     // BL
+                    vertices.emplace_back(create_vertex(x,y,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::DOWN), (int)Direction::DOWN, 0));   // TL
+                    vertices.emplace_back(create_vertex(x+1,y,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::DOWN), (int)Direction::DOWN, 1)); // TR
+                    vertices.emplace_back(create_vertex(x+1,y,z,getTextureID(blocks[x][y + yOffset][z], Direction::DOWN), (int)Direction::DOWN, 2));   // BR
+                    vertices.emplace_back(create_vertex(x,y,z,getTextureID(blocks[x][y + yOffset][z], Direction::DOWN), (int)Direction::DOWN, 3));     // BL
                     
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((y == WorldConfig::CHUNK_SIZE-1 ? (columnHeight == WorldConfig::CHUNK_COLUMN_HEIGHT-1 || Blocks[x][y+1 + yOffset][z] == 0) : Blocks[x][y+1 + yOffset][z] == 0)){ // UP
+                if ((y == WorldConfig::CHUNK_SIZE-1 ? (columnHeight == WorldConfig::CHUNK_COLUMN_HEIGHT-1 || blocks[x][y+1 + yOffset][z] == Block::AIR) : blocks[x][y+1 + yOffset][z] == Block::AIR)){ // UP
                     uint32_t idx = vertices.size();
-                    vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::UP, 0));     // TL
-                    vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::UP, 1));   // TR
-                    vertices.emplace_back(create_vertex(x+1,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::UP, 2)); // BR
-                    vertices.emplace_back(create_vertex(x,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::UP, 3));   // BL
+                    vertices.emplace_back(create_vertex(x,y+1,z,getTextureID(blocks[x][y + yOffset][z], Direction::UP), (int)Direction::UP, 0));     // TL
+                    vertices.emplace_back(create_vertex(x+1,y+1,z,getTextureID(blocks[x][y + yOffset][z], Direction::UP), (int)Direction::UP, 1));   // TR
+                    vertices.emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::UP), (int)Direction::UP, 2)); // BR
+                    vertices.emplace_back(create_vertex(x,y+1,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::UP), (int)Direction::UP, 3));   // BL
                     
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((z == 0 ? (Blocks_Back == nullptr || Blocks_Back[x][y + yOffset][WorldConfig::CHUNK_SIZE-1] == 0) : Blocks[x][y + yOffset][z-1] == 0)){ // BACKWARD
+                if ((z == 0 ? (blocks_Back == nullptr || blocks_Back[x][y + yOffset][WorldConfig::CHUNK_SIZE-1] == Block::AIR) : blocks[x][y + yOffset][z-1] == Block::AIR)){ // BACKWARD
                     uint32_t idx = vertices.size();
-                    vertices.emplace_back(create_vertex(x+1,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 0)); // TL
-                    vertices.emplace_back(create_vertex(x,y+1,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 1));   // TR
-                    vertices.emplace_back(create_vertex(x,y,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 2));     // BR
-                    vertices.emplace_back(create_vertex(x+1,y,z,Blocks[x][y + yOffset][z], (int)Direction::BACKWARD, 3));   // BL
+                    vertices.emplace_back(create_vertex(x+1,y+1,z,getTextureID(blocks[x][y + yOffset][z], Direction::BACKWARD), (int)Direction::BACKWARD, 0)); // TL
+                    vertices.emplace_back(create_vertex(x,y+1,z,getTextureID(blocks[x][y + yOffset][z], Direction::BACKWARD), (int)Direction::BACKWARD, 1));   // TR
+                    vertices.emplace_back(create_vertex(x,y,z,getTextureID(blocks[x][y + yOffset][z], Direction::BACKWARD), (int)Direction::BACKWARD, 2));     // BR
+                    vertices.emplace_back(create_vertex(x+1,y,z,getTextureID(blocks[x][y + yOffset][z], Direction::BACKWARD), (int)Direction::BACKWARD, 3));   // BL
                     
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
                 }
-                if ((z == WorldConfig::CHUNK_SIZE-1 ? (Blocks_Front == nullptr || Blocks_Front[x][y + yOffset][0] == 0) : Blocks[x][y + yOffset][z+1] == 0)){ // FORWARD
+                if ((z == WorldConfig::CHUNK_SIZE-1 ? (blocks_Front == nullptr || blocks_Front[x][y + yOffset][0] == Block::AIR) : blocks[x][y + yOffset][z+1] == Block::AIR)){ // FORWARD
                     uint32_t idx = vertices.size();
-                    vertices.emplace_back(create_vertex(x,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 0)); // TL
-                    vertices.emplace_back(create_vertex(x+1,y+1,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 1)); // TR
-                    vertices.emplace_back(create_vertex(x+1,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 2));   // BR
-                    vertices.emplace_back(create_vertex(x,y,z+1,Blocks[x][y + yOffset][z], (int)Direction::FORWARD, 3));     // BL
+                    vertices.emplace_back(create_vertex(x,y+1,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::FORWARD), (int)Direction::FORWARD, 0)); // TL
+                    vertices.emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::FORWARD), (int)Direction::FORWARD, 1)); // TR
+                    vertices.emplace_back(create_vertex(x+1,y,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::FORWARD), (int)Direction::FORWARD, 2));   // BR
+                    vertices.emplace_back(create_vertex(x,y,z+1,getTextureID(blocks[x][y + yOffset][z], Direction::FORWARD), (int)Direction::FORWARD, 3));     // BL
                     
                     indicies.push_back(idx); indicies.push_back(idx + 3); indicies.push_back(idx + 2);
                     indicies.push_back(idx); indicies.push_back(idx + 2); indicies.push_back(idx + 1);
@@ -144,7 +144,7 @@ void Chunk::generateMesh(
 ChunkColumn::ChunkColumn(glm::vec2 position, VramAllocator* vramAllocator) 
     : position(position), vramAllocator(vramAllocator)
 {
-    std::memset(Blocks, 0, sizeof(Blocks));
+    std::memset(blocks, 0, sizeof(blocks));
     for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
         chunks[i].init(vramAllocator);
     }
@@ -157,7 +157,7 @@ ChunkColumn::~ChunkColumn()
 ChunkColumn::ChunkColumn(ChunkColumn &&other) noexcept 
     : position(other.position) 
 {
-    std::memcpy(Blocks, other.Blocks, sizeof(Blocks));
+    std::memcpy(blocks, other.blocks, sizeof(blocks));
     for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
         chunks[i] = std::move(other.chunks[i]);
     }
@@ -167,7 +167,7 @@ ChunkColumn &ChunkColumn::operator=(ChunkColumn &&other) noexcept
 {
     if (this != &other) {
         position = other.position;
-        std::memcpy(Blocks, other.Blocks, sizeof(Blocks));
+        std::memcpy(blocks, other.blocks, sizeof(blocks));
         for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
             chunks[i] = std::move(other.chunks[i]);
         }

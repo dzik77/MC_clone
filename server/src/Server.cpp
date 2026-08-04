@@ -26,7 +26,9 @@ void Server::run() {
     
     running = true;
     consoleThread = std::thread(&Server::consoleInput, this);
-    chunkGenerationThread = std::thread(&Server::generateChunks, this);
+    for (int i = 0; i < numChunkGenerationThreads; ++i) {
+        chunkGenerationThreads.emplace_back(&Server::generateChunks, this, i);
+    }
 
     while(running) {
 
@@ -77,6 +79,7 @@ void Server::run() {
             if (command == "exit") {
                 std::cout << "Shutting down server..." << std::endl;
                 running = false;
+                chunksToGenerateCV.notify_all(); // Notify the chunk generation thread to exit
             } else {
                 std::cout << "Unknown command: " << command << std::endl;
             }
@@ -85,6 +88,11 @@ void Server::run() {
     }
 
     consoleThread.detach();
+    for (auto& thread : chunkGenerationThreads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
 
 }
 
@@ -97,6 +105,7 @@ void Server::handlePacket(ENetEvent& event) {
             RequestChunkPacket* requestChunkPacket = reinterpret_cast<RequestChunkPacket*>(event.packet->data);
             std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
             chunksToGenerate.push({requestChunkPacket->chunkColumnX, requestChunkPacket->chunkColumnZ, event.peer});
+            chunksToGenerateCV.notify_one();
     
             break;
         }
@@ -108,24 +117,28 @@ void Server::handlePacket(ENetEvent& event) {
     enet_packet_destroy(event.packet);
 }
 
-void Server::generateChunks() {
+void Server::generateChunks(int threadId) {
 
+    std::osyncstream(std::cout) << "Chunk generation thread " << threadId+1 << " started." << std::endl;
+
+    int chunksGenerated = 0;
     while (running) {
 
         ChunkToGenerate chunkToGenerate;
-        bool hasChunkToGenerate = false;
-        {
-            std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
-            if (!chunksToGenerate.empty()) {
-                chunkToGenerate = chunksToGenerate.front();
-                chunksToGenerate.pop();
-                hasChunkToGenerate = true;
-            }
-        }
 
-        if (!hasChunkToGenerate){
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
+        {
+            std::unique_lock<std::mutex> lock(chunksToGenerateMutex);
+
+            chunksToGenerateCV.wait(lock, [this] { 
+                return !chunksToGenerate.empty() || !running; 
+            });
+
+            if (!running){
+                break;
+            }
+
+            chunkToGenerate = chunksToGenerate.front();
+            chunksToGenerate.pop();
         }
 
         ChunkPacket chunkPackets[WorldConfig::CHUNK_COLUMN_HEIGHT];
@@ -136,9 +149,12 @@ void Server::generateChunks() {
             for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
                 chunksToSend.push({chunkPackets[i], chunkToGenerate.peer});
             }
+            chunksGenerated += WorldConfig::CHUNK_COLUMN_HEIGHT;
         }
 
     }
+
+    std::osyncstream(std::cout) << "Chunk generation thread " << threadId+1 << " exiting. Total chunks generated: " << chunksGenerated << std::endl;
 
 }
 

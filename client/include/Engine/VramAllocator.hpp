@@ -7,17 +7,17 @@
 #include <stdexcept>
 #include <cstring>
 
-struct Block {
+struct VramBlock {
     std::size_t offset;
     std::size_t size;
 };
 struct CompareBlockByOffset {
-    bool operator()(const Block& a, const Block& b) const {
+    bool operator()(const VramBlock& a, const VramBlock& b) const {
         return a.offset < b.offset;
     }
 };
 struct CompareBlockBySize {
-    bool operator()(const Block& a, const Block& b) const {
+    bool operator()(const VramBlock& a, const VramBlock& b) const {
         return (a.size < b.size) || (a.size == b.size && a.offset < b.offset);
     }
 };
@@ -59,7 +59,7 @@ class VramAllocator{
         std::size_t VBOSize, EBOSize;
         GLuint VBO, EBO;
         //GLbitfield accessFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
-        std::set<Block, CompareBlockBySize> freeVertexBlocks, freeIndexBlocks;
-        std::set<Block, CompareBlockByOffset> freeVertexBlocksOffset, freeIndexBlocksOffset;
+        std::set<VramBlock, CompareBlockBySize> freeVertexBlocks, freeIndexBlocks;
+        std::set<VramBlock, CompareBlockByOffset> freeVertexBlocksOffset, freeIndexBlocksOffset;
     
 };

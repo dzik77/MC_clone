@@ -2,9 +2,10 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <WorldConfig.hpp>
-#include <Engine/Direction.hpp>
+#include <Direction.hpp>
 #include <Engine/VramAllocator.hpp>
 #include <utility>
+#include <Block.hpp>
 
 struct ChunkPosition{
     glm::vec4 position;
@@ -28,12 +29,12 @@ class Chunk{
     Chunk& operator=(Chunk&& other) noexcept;
 
     void generateMesh(
-        uint8_t (*Blocks)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE], int columnHeight,
-        uint8_t (*Blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
-        uint8_t (*Blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
-        uint8_t (*Blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
-        uint8_t (*Blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE]);   
-int verticesCount = 0;
+        Block (*blocks)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE], int columnHeight,
+        Block (*blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
+        Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE]);   
+    int verticesCount = 0;
     int indiciesCount = 0;
     uint32_t ssboIndex = -1;
     VramAllocator* vramAllocator;
@@ -43,7 +44,7 @@ int verticesCount = 0;
 };
 
 Chunk create_chunk(glm::ivec3 chunkPosition);
-inline uint32_t create_vertex(int x, int y, int z, int TextureID, int Direction, int UVCoordinate) {
+inline uint32_t create_vertex(int x, int y, int z, uint8_t TextureID, int Direction, int UVCoordinate) {
     /*
         x - 5 bits
         y - 5 bits
@@ -69,7 +70,7 @@ class ChunkColumn{
     ChunkColumn(ChunkColumn&& other) noexcept;
     ChunkColumn& operator=(ChunkColumn&& other) noexcept;
 
-    uint8_t Blocks[WorldConfig::CHUNK_SIZE][WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE];
+    Block blocks[WorldConfig::CHUNK_SIZE][WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE];
     Chunk chunks[WorldConfig::CHUNK_COLUMN_HEIGHT];
     glm::vec2 position;
     VramAllocator* vramAllocator;

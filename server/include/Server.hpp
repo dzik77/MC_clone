@@ -9,6 +9,8 @@
 #include <string>
 #include <World.hpp>
 #include <PacketType.hpp>
+#include <condition_variable>
+#include <syncstream>
 
 struct ChunkToGenerate {
     int x;
@@ -45,15 +47,17 @@ class Server{
         void consoleInput();
 
         // World generation
-        std::thread chunkGenerationThread;
+        std::vector<std::thread> chunkGenerationThreads;
+        int numChunkGenerationThreads = 5;
         World world;
 
         std::queue<ChunkToGenerate> chunksToGenerate;
         std::mutex chunksToGenerateMutex;
+        std::condition_variable chunksToGenerateCV;
 
         std::queue<ChunkToSend> chunksToSend;
         std::mutex chunksToSendMutex;
 
-        void generateChunks();
+        void generateChunks(int threadId);
 
 };

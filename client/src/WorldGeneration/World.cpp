@@ -6,10 +6,10 @@
 #include <stdexcept>
 
 const std::vector<std::filesystem::path> texturePaths = {
-    "textures/stone.png",
     "textures/dirt.png",
     "textures/grass_block_side.png",
-    "textures/grass_block_top_item.png"
+    "textures/grass_block_top_item.png",
+    "textures/stone.png"
 };
 
 
@@ -63,12 +63,48 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
     // load from server TODO:
     // i guess for now just auto wait for the chunk
 
-    /*
+    //std::cout << "Requesting chunk column at position: (" << chunkColumn.position.x << ", " << chunkColumn.position.y << ")" << std::endl;
+
+    // request chunk from server
     RequestChunkPacket requestPacket;
     requestPacket.chunkColumnX = chunkColumn.position.x;
     requestPacket.chunkColumnZ = chunkColumn.position.y;
     ENetPacket *packet = enet_packet_create(&requestPacket, sizeof(RequestChunkPacket), ENET_PACKET_FLAG_RELIABLE);
-    enet_peer_
+    assert(serverPeer != nullptr);
+    enet_peer_send(serverPeer, 0, packet);
+
+    // for now just wait for the chunk to be received
+    /*
+    ENetEvent event;
+    int chunksReceived = 0;
+    while (chunksReceived < WorldConfig::CHUNK_COLUMN_HEIGHT) {
+        while (enet_host_service(serverPeer->host, &event, 50) > 0) {
+            if (event.type == ENET_EVENT_TYPE_RECEIVE) {
+                PacketType packetType = static_cast<PacketType>(event.packet->data[0]);
+                if (packetType == PacketType::Chunk) {
+                    ChunkPacket* chunkPacket = reinterpret_cast<ChunkPacket*>(event.packet->data);
+                    
+                    if (chunkPacket->x != chunkColumn.position.x || chunkPacket->z != chunkColumn.position.y) {
+                        std::cerr << "Received chunk for wrong position: (" << chunkPacket->x << ", " << chunkPacket->z << "), expected: (" << chunkColumn.position.x << ", " << chunkColumn.position.y << ")" << std::endl;
+                        enet_packet_destroy(event.packet);
+                        continue;
+                    }
+                    
+                    for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++) {
+                        for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++) {
+                            for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++) {
+                                chunkColumn.blocks[x][y + chunkPacket->y * WorldConfig::CHUNK_SIZE][z] = chunkPacket->chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + y * WorldConfig::CHUNK_SIZE + z];
+                            }
+                        }
+                    }
+                    chunksReceived++;
+                }
+                enet_packet_destroy(event.packet);
+            }
+        }
+    }
+    
+    std::cout << "Received chunk column at position: (" << chunkColumn.position.x << ", " << chunkColumn.position.y << ")" << std::endl;
     */
     
     // Assign SSBO indices to the chunks in the column
@@ -88,85 +124,116 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
 
 }
 
+void World::loadTerrain() {
+    
+    while (!receivedChunks.empty()) {
+
+        auto chunkPacket = receivedChunks.front();
+        receivedChunks.pop();
+
+        std::pair<int,int> chunkColumnPos = {chunkPacket.x, chunkPacket.z};
+        auto it = loadedChunkPositions.find(chunkColumnPos);
+    
+        if (it == loadedChunkPositions.end()){
+            return; // chunk column not loaded, ignore
+        }
+    
+        for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++) {
+            for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++) {
+                for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++) {
+                    ChunkColumns[it->second].blocks[x][y + chunkPacket.y * WorldConfig::CHUNK_SIZE][z] = chunkPacket.chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + y * WorldConfig::CHUNK_SIZE + z];
+                }
+            }
+        }
+        uploadedChunkPositions[chunkColumnPos] += 1;
+        if (uploadedChunkPositions[chunkColumnPos] == WorldConfig::CHUNK_COLUMN_HEIGHT){
+            chunksToGenerateMesh.push(it->second);
+        }
+
+    }
+
+
+}
+
 void World::generateMesh() {
 
-    std::stack<int> tempStack;
     while(!chunksGeneratedOnEdge.empty()){
-        int idx = chunksGeneratedOnEdge.top();
+        int idx = *chunksGeneratedOnEdge.begin();
         auto& chunkColumn = ChunkColumns[idx];
-        chunksGeneratedOnEdge.pop();
-        uint8_t (*Blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        uint8_t (*Blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        uint8_t (*Blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        uint8_t (*Blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        chunksGeneratedOnEdge.erase(chunksGeneratedOnEdge.begin());
+        Block (*blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
         auto it = loadedChunkPositions.find({chunkColumn.position.x-1, chunkColumn.position.y});
         if (it != loadedChunkPositions.end()){
-            Blocks_Left = ChunkColumns[it->second].Blocks;
+            blocks_Left = ChunkColumns[it->second].blocks;
         }
         it = loadedChunkPositions.find({chunkColumn.position.x+1, chunkColumn.position.y});
         if (it != loadedChunkPositions.end()){
-            Blocks_Right = ChunkColumns[it->second].Blocks;
+            blocks_Right = ChunkColumns[it->second].blocks;
         }
         it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y+1});
         if (it != loadedChunkPositions.end()){
-            Blocks_Front = ChunkColumns[it->second].Blocks;
+            blocks_Front = ChunkColumns[it->second].blocks;
         }
         it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y-1});
         if (it != loadedChunkPositions.end()){
-            Blocks_Back = ChunkColumns[it->second].Blocks;
-        }
-        if (Blocks_Front == nullptr || Blocks_Back == nullptr || Blocks_Left == nullptr || Blocks_Right == nullptr){
-            tempStack.push(idx);
-            continue;
+            blocks_Back = ChunkColumns[it->second].blocks;
         }
         for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
             chunkColumn.chunks[height].generateMesh(
-                chunkColumn.Blocks, height,
-                Blocks_Front,
-                Blocks_Back,
-                Blocks_Left,
-                Blocks_Right
+                chunkColumn.blocks, height,
+                blocks_Front,
+                blocks_Back,
+                blocks_Left,
+                blocks_Right
             );
         }
-    }
-    while(!tempStack.empty()){
-        chunksGeneratedOnEdge.push(tempStack.top());
-        tempStack.pop();
     }
     while(!chunksToGenerateMesh.empty()){
         int idx = chunksToGenerateMesh.top();
         auto& chunkColumn = ChunkColumns[idx];
         chunksToGenerateMesh.pop();
-        uint8_t (*Blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        uint8_t (*Blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        uint8_t (*Blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        uint8_t (*Blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        Block (*blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
+        Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
         auto it = loadedChunkPositions.find({chunkColumn.position.x-1, chunkColumn.position.y});
         if (it != loadedChunkPositions.end()){
-            Blocks_Left = ChunkColumns[it->second].Blocks;
+            blocks_Left = ChunkColumns[it->second].blocks;
+            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert(it->second);
+            }
         }
         it = loadedChunkPositions.find({chunkColumn.position.x+1, chunkColumn.position.y});
         if (it != loadedChunkPositions.end()){
-            Blocks_Right = ChunkColumns[it->second].Blocks;
+            blocks_Right = ChunkColumns[it->second].blocks;
+            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert(it->second);
+            }
         }
         it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y+1});
         if (it != loadedChunkPositions.end()){
-            Blocks_Front = ChunkColumns[it->second].Blocks;
+            blocks_Front = ChunkColumns[it->second].blocks;
+            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert(it->second);
+            }
         }
         it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y-1});
         if (it != loadedChunkPositions.end()){
-            Blocks_Back = ChunkColumns[it->second].Blocks;
-        }
-        if (Blocks_Front == nullptr || Blocks_Back == nullptr || Blocks_Left == nullptr || Blocks_Right == nullptr){
-            chunksGeneratedOnEdge.push(idx);
+            blocks_Back = ChunkColumns[it->second].blocks;
+            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert(it->second);
+            }
         }
         for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
             chunkColumn.chunks[height].generateMesh(
-                chunkColumn.Blocks, height,
-                Blocks_Front,
-                Blocks_Back,
-                Blocks_Left,
-                Blocks_Right
+                chunkColumn.blocks, height,
+                blocks_Front,
+                blocks_Back,
+                blocks_Left,
+                blocks_Right
             );
         }
     }
@@ -200,15 +267,14 @@ void World::loadChunks(glm::vec3 playerPosition) {
                         freeChunkPositionIndices.push(ChunkColumns[idx].chunks[j].ssboIndex);
                     }
                     loadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
+                    uploadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
                     ChunkColumns[idx] = ChunkColumn(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
                     generateTerrain(ChunkColumns[idx]);
                     loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = idx;
-                    chunksToGenerateMesh.push(idx);
                 } else {
                     ChunkColumns.emplace_back(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
                     generateTerrain(ChunkColumns.back());
                     loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = ChunkColumns.size()-1;
-                    chunksToGenerateMesh.push(ChunkColumns.size()-1);
                 }
             }
         }
@@ -223,6 +289,7 @@ void World::loadChunks(glm::vec3 playerPosition) {
             }
         }
         loadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
+        uploadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
         
         if (idx != ChunkColumns.size() - 1) {
             int lastIdx = ChunkColumns.size() - 1;

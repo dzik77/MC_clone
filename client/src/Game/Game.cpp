@@ -74,11 +74,8 @@ Game::Game() {
 
     stbi_set_flip_vertically_on_load(true);
 
-    // network initialization
-    client = enet_host_create(nullptr, 1, 2, 0, 0);
-    if (client == nullptr) {
-        throw std::runtime_error("Failed to create ENet client host.");
-    }
+    // networking
+    networking.initialize(world.receivedChunks);
 
     // shaders
     std::cout << "Loading shaders..." << std::endl;
@@ -96,42 +93,13 @@ Game::~Game(){
     enet_deinitialize();
 }
 
-bool Game::connectToServer(std::string ip) {
-
-    enet_address_set_host(&address, ip.c_str());
-    address.port = 1234;
-
-    peer = enet_host_connect(client, &address, 2, 0);
-    if (peer == nullptr) {
-        std::cerr << "No available peers for initiating an ENet connection." << std::endl;
-        return false;
-    }
-
-    std::cout << "Attempting to connect to server at " << ip << ":" << address.port << "..." << std::endl;
-
-    ENetEvent event;
-    // Wait up to 5 seconds for the connection attempt to succeed
-    if (enet_host_service(client, &event, 5000) > 0 &&
-        event.type == ENET_EVENT_TYPE_CONNECT)
-    {
-        std::cout << "Successfully connected to server at " << ip << ":" << address.port << std::endl;
-        enet_host_flush(client); // Ensure all packets are sent (3 step handshake)
-        return true;
-    }
-    else
-    {
-        // Connection failed or timed out
-        enet_peer_reset(peer);
-        std::cout << "Failed to connect to server at " << ip << ":" << address.port << std::endl;
-        return false;
-    }
-}
-
 void Game::run() {
-
-
-
     
+    std::cout << "Attempting to connect to server..." << std::endl;
+    while (!networking.connectToServer("127.0.0.1"));
+    std::cout << "Connected to server!" << std::endl;
+    world.setServerPeer(networking.getServerPeer());
+
     shader.use();
     shader.setInt("textureArray", 0);
     projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 1000.f);
@@ -167,6 +135,10 @@ void Game::run() {
         world.loadChunks(camera.getPosition());
         world.generateMesh();
         world.render(shader);
+        
+        networking.pollEvents();
+
+        world.loadTerrain();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -200,6 +172,14 @@ void Game::processInput(float deltaTime) {
         camera.KeyboardInput(Direction::UP, deltaTime);
     } else if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS){
         camera.KeyboardInput(Direction::DOWN, deltaTime);
+    } else if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
+        glfwSetWindowShouldClose(window, true);
+    } else if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS){
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        focus = false;
+    } else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS){
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        focus = true;
     }
 }
 
@@ -208,18 +188,23 @@ void Game::mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     if (!game) return;
 
     static bool firstCallback = true;
-    static double lastX, lastY;
-
-    if (firstCallback){
+    if (game->focus) {
+        static double lastX, lastY;
+    
+        if (firstCallback){
+            lastX = xpos;
+            lastY = ypos;
+            firstCallback = false;
+        }
+        double xoffset = xpos - lastX;
+        double yoffset = lastY - ypos;
         lastX = xpos;
-        lastY = ypos;
-        firstCallback = false;
+        lastY =  ypos;
+    
+        game->camera.MouseInput(xoffset, yoffset);
+    } else {
+        firstCallback = true;
     }
-    double xoffset = xpos - lastX;
-    double yoffset = lastY - ypos;
-    lastX = xpos;
-    lastY =  ypos;
 
-    game->camera.MouseInput(xoffset, yoffset);
 
 }

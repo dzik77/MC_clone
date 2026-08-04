@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <WorldConfig.hpp>
+#include <Block.hpp>
 
 enum class PacketType : uint8_t {
     Chunk = 1,
@@ -10,8 +12,8 @@ enum class PacketType : uint8_t {
 
 struct ChunkPacket {
     PacketType type = PacketType::Chunk;
-    uint8_t x,y,z;
-    uint8_t chunkColumnBlocks[16 * 16 * 16];
+    int32_t x,y,z;
+    Block chunkBlocks[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT * WorldConfig::CHUNK_SIZE];
 };
 struct RequestChunkPacket {
     PacketType type = PacketType::RequestChunk;

@@ -1,4 +1,5 @@
 #include "World.hpp"
+#include <cstring>
 
 World::World() {
 
@@ -58,14 +59,16 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkCo
     erosionFractal->GenUniformGrid2D(erosionBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
     peaksAndValleysFractal->GenUniformGrid2D(peaksAndValleysBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
 
+    for (int y = 0; y < WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
+        chunkColumnPacket[y].x = chunkColumnPosition.x;
+        chunkColumnPacket[y].z = chunkColumnPosition.y;
+        chunkColumnPacket[y].y = y;
+        std::memset(chunkColumnPacket[y].chunkBlocks, 0, sizeof(chunkColumnPacket[y].chunkBlocks));
+    }
+
     // Combine the noise values to determine the final height of each column in the chunk
     for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
         for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
-            for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++){
-                chunkColumnPacket[y].x = chunkColumnPosition.x;
-                chunkColumnPacket[y].z = chunkColumnPosition.y;
-                chunkColumnPacket[y].y = y;
-            }
             float continentalnessValue = continentalnessSpline.evaluateHeight(continentalnessBuffer[z * WorldConfig::CHUNK_SIZE + x]);
             float erosionValue = erosionSpline.evaluateHeight(erosionBuffer[z * WorldConfig::CHUNK_SIZE + x]);
             float peaksAndValleysValue = peaksAndValleysSpline.evaluateHeight(peaksAndValleysBuffer[z * WorldConfig::CHUNK_SIZE + x]);
@@ -73,7 +76,9 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkCo
             int height = continentalnessValue + (erosionValue * peaksAndValleysValue);
             height = std::clamp(height, 1, WorldConfig::MAX_HEIGHT - 1);
             for (int y = 0; y < height; y++){
-                chunkColumnPacket[y].chunkColumnBlocks[z * WorldConfig::CHUNK_SIZE + x] = 4;
+                int chunkY = y / WorldConfig::CHUNK_SIZE;
+                int localY = y % WorldConfig::CHUNK_SIZE;
+                chunkColumnPacket[chunkY].chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + localY * WorldConfig::CHUNK_SIZE + z] = Block::GRASS;
             }
             //chunkColumn.Blocks[x][0][z] = 1;
             //chunkColumn.Blocks[x][63][z] = 2;

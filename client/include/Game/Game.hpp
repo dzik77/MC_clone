@@ -12,16 +12,18 @@
 #include <WorldGeneration/World.hpp>
 #include <string>
 #include <Engine/stb_image.h>
+#include <Engine/Networking.hpp>
 
 #define DEBUG
 //#define AZDO_RENDERING
 
 class Game{
     public:
+
         Game();
         ~Game();
-        bool connectToServer(std::string ip);
         void run();
+
     private:
 
         Camera camera;
@@ -32,10 +34,10 @@ class Game{
         const std::filesystem::path fragmentShaderPath{"Shaders/fragment.glsl"};
         Shader shader;
 
-        // networking
-        ENetHost* client;
-        ENetAddress address;
-        ENetPeer* peer;
+        Networking networking;
+
+        // ui inputs
+        bool focus = true;
 
         void processInput(float deltaTime);
         static void error_callback(int error, const char* description);

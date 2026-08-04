@@ -10,6 +10,7 @@
 #include <Engine/Engine.hpp>
 #include <stack>
 #include <map>
+#include <queue>
 
 #include <enet/enet.h>
 #include <PacketType.hpp>
@@ -22,14 +23,21 @@ class World{
         World();
         void initialize();
         void generateTerrain(ChunkColumn &chunkColumn);
+        void loadTerrain();
         void generateMesh();
         void loadChunks(glm::vec3 playerPosition);
         void render(Shader& shader);
         void clean();
+        void setServerPeer(ENetPeer* peer) { serverPeer = peer; }
         ~World();
+
+        std::queue<ChunkPacket> receivedChunks;
         
         private:
         
+        // networking
+        ENetPeer* serverPeer; // MUST BE SET
+
         void loadTextures();
         TextureArray textureArray;
         
@@ -39,8 +47,9 @@ class World{
         std::vector<ChunkColumn> ChunkColumns;
         std::stack<int> freeChunkPositionIndices;
         std::stack<int> chunksToGenerateMesh;
-        std::stack<int> chunksGeneratedOnEdge;
+        std::set<int> chunksGeneratedOnEdge;
         std::map<std::pair<int, int>, int> loadedChunkPositions;
+        std::map<std::pair<int, int>, int> uploadedChunkPositions;
         GLuint chunkSSBO;
         ChunkPosition* ssboData;
         GLuint indirectCommandBuffer;

@@ -103,15 +103,15 @@ BufferAllocation VramAllocator::allocate(std::size_t vertexCount, std::size_t in
     allocation.indexBlocks = freeIndexIt->offset;
 
     if (freeVertexIt->size > vertexCount) {
-        freeVertexBlocks.insert(Block{freeVertexIt->offset + vertexCount, freeVertexIt->size - vertexCount});
-        freeVertexBlocksOffset.insert(Block{freeVertexIt->offset + vertexCount, freeVertexIt->size - vertexCount});
+        freeVertexBlocks.insert(VramBlock{freeVertexIt->offset + vertexCount, freeVertexIt->size - vertexCount});
+        freeVertexBlocksOffset.insert(VramBlock{freeVertexIt->offset + vertexCount, freeVertexIt->size - vertexCount});
     }
     freeVertexBlocks.erase(freeVertexIt);
     freeVertexBlocksOffset.erase(freeVertexOffsetIt);
 
     if (freeIndexIt->size > indexCount) {
-        freeIndexBlocks.insert(Block{freeIndexIt->offset + indexCount, freeIndexIt->size - indexCount});
-        freeIndexBlocksOffset.insert(Block{freeIndexIt->offset + indexCount, freeIndexIt->size - indexCount});
+        freeIndexBlocks.insert(VramBlock{freeIndexIt->offset + indexCount, freeIndexIt->size - indexCount});
+        freeIndexBlocksOffset.insert(VramBlock{freeIndexIt->offset + indexCount, freeIndexIt->size - indexCount});
     }
     freeIndexBlocks.erase(freeIndexIt);
     freeIndexBlocksOffset.erase(freeIndexOffsetIt);
@@ -121,7 +121,7 @@ BufferAllocation VramAllocator::allocate(std::size_t vertexCount, std::size_t in
 
 void VramAllocator::free(const BufferAllocation &allocation) {
 
-    Block vertexBlock = {allocation.vertexBlocks, allocation.vertexCount};
+    VramBlock vertexBlock = {allocation.vertexBlocks, allocation.vertexCount};
     auto rightVertexBlockOffsetIt = freeVertexBlocksOffset.upper_bound({vertexBlock.offset, 0});
     if (rightVertexBlockOffsetIt != freeVertexBlocksOffset.end()) {
         auto rightVertexBlockIt = freeVertexBlocks.find({rightVertexBlockOffsetIt->offset, rightVertexBlockOffsetIt->size});
@@ -145,7 +145,7 @@ void VramAllocator::free(const BufferAllocation &allocation) {
     freeVertexBlocks.insert(vertexBlock);
     freeVertexBlocksOffset.insert(vertexBlock);
 
-    Block indexBlock = {allocation.indexBlocks, allocation.indexCount};
+    VramBlock indexBlock = {allocation.indexBlocks, allocation.indexCount};
     auto rightIndexBlockOffsetIt = freeIndexBlocksOffset.upper_bound({indexBlock.offset, 0});
     if (rightIndexBlockOffsetIt != freeIndexBlocksOffset.end()) {
         auto rightIndexBlockIt = freeIndexBlocks.find({rightIndexBlockOffsetIt->offset, rightIndexBlockOffsetIt->size});
