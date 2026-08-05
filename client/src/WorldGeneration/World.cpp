@@ -290,6 +290,7 @@ void World::loadChunks(glm::vec3 playerPosition) {
         }
     }
 
+    sortedChunkColumnsIndices.clear();
     for (auto [x,z] : chunksToLoadOffset){
         if (loadedChunkPositions.find(std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)) == loadedChunkPositions.end()){
             if (toRemove.size() > 0){
@@ -303,11 +304,15 @@ void World::loadChunks(glm::vec3 playerPosition) {
                 ChunkColumns[idx] = ChunkColumn(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
                 generateTerrain(ChunkColumns[idx]);
                 loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = idx;
+                sortedChunkColumnsIndices.push_back(idx);
             } else {
                 ChunkColumns.emplace_back(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
                 generateTerrain(ChunkColumns.back());
                 loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = ChunkColumns.size()-1;
+                sortedChunkColumnsIndices.push_back(ChunkColumns.size()-1);
             }
+        } else {
+            sortedChunkColumnsIndices.push_back(loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)]);
         }
     }
     
@@ -336,19 +341,9 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
 
     static bool firstRender = true;
 
-    sortedChunkColumnsIndices.clear();
-    sortedChunkColumnsIndices = std::vector<int>(ChunkColumns.size());
-    std::iota(sortedChunkColumnsIndices.begin(), sortedChunkColumnsIndices.end(), 0);
-
-    // Sort back-to-front (farthest first) for correct transparent blending
-    std::sort(sortedChunkColumnsIndices.begin(), sortedChunkColumnsIndices.end(), [&](int a, int b) {
-        float distA = glm::distance(glm::vec2(ChunkColumns[a].position.x * WorldConfig::CHUNK_SIZE, ChunkColumns[a].position.y * WorldConfig::CHUNK_SIZE), glm::vec2(playerPosition.x, playerPosition.z));
-        float distB = glm::distance(glm::vec2(ChunkColumns[b].position.x * WorldConfig::CHUNK_SIZE, ChunkColumns[b].position.y * WorldConfig::CHUNK_SIZE), glm::vec2(playerPosition.x, playerPosition.z));
-        return distA > distB;
-    });
-
     std::vector<DrawElementsIndirectCommand> drawCommandsOpaque;
-    for (auto& chunkColumn : ChunkColumns){
+    for (auto it = sortedChunkColumnsIndices.begin(); it != sortedChunkColumnsIndices.end(); ++it){
+        auto& chunkColumn = ChunkColumns[*it];
         for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++){
             if (chunkColumn.chunks[i].indiciesCountOpaque == 0 || chunkColumn.chunks[i].ssboIndex == -1) continue;
             DrawElementsIndirectCommand cmd;
@@ -362,8 +357,8 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
     }
 
     std::vector<DrawElementsIndirectCommand> drawCommandsTransparent;
-    for (auto i : sortedChunkColumnsIndices){
-        auto& chunkColumn = ChunkColumns[i];
+    for (auto it = sortedChunkColumnsIndices.rbegin(); it != sortedChunkColumnsIndices.rend(); ++it){
+        auto& chunkColumn = ChunkColumns[*it];
         for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++){
             if (chunkColumn.chunks[j].indiciesCountTransparent == 0 || chunkColumn.chunks[j].ssboIndex == -1) continue;
             DrawElementsIndirectCommand cmd;
