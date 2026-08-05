@@ -32,6 +32,8 @@ class World{
         ~World();
 
         std::queue<ChunkPacket> receivedChunks;
+
+        void setRenderDistance(int distance);
         
         private:
         
@@ -42,6 +44,8 @@ class World{
         TextureArray textureArray;
         
         int renderDistance = 32;
+        std::vector<std::pair<int,int>> chunksToLoadOffset;
+
         VramAllocator vramAllocator;
         GLuint globalVAO;
         std::vector<ChunkColumn> ChunkColumns;

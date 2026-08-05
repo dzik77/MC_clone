@@ -136,8 +136,10 @@ void Game::run() {
         world.generateMesh();
         world.render(shader);
         
+        // networking
         networking.pollEvents();
 
+        // loading chunks from server
         world.loadTerrain();
 
         glfwSwapBuffers(window);

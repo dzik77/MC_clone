@@ -124,7 +124,8 @@ void Server::generateChunks(int threadId) {
     int chunksGenerated = 0;
     while (running) {
 
-        ChunkToGenerate chunkToGenerate;
+        ChunkToGenerate chunkToGenerate[chunkToGeneratePerThread];
+        int chunksToGenerateCount = 0;
 
         {
             std::unique_lock<std::mutex> lock(chunksToGenerateMutex);
@@ -137,19 +138,27 @@ void Server::generateChunks(int threadId) {
                 break;
             }
 
-            chunkToGenerate = chunksToGenerate.front();
-            chunksToGenerate.pop();
+            while (chunksToGenerateCount < chunkToGeneratePerThread && !chunksToGenerate.empty()) {
+                chunkToGenerate[chunksToGenerateCount] = chunksToGenerate.front();
+                chunksToGenerate.pop();
+                chunksToGenerateCount++;
+            }
         }
 
-        ChunkPacket chunkPackets[WorldConfig::CHUNK_COLUMN_HEIGHT];
-        world.generateTerrain(glm::ivec2(chunkToGenerate.x, chunkToGenerate.z), chunkPackets);
+
+        ChunkPacket chunkPackets[chunkToGeneratePerThread][WorldConfig::CHUNK_COLUMN_HEIGHT];
+        for (int i = 0; i < chunksToGenerateCount; i++){
+            world.generateTerrain(glm::ivec2(chunkToGenerate[i].x, chunkToGenerate[i].z), chunkPackets[i]);
+        }
 
         {
             std::lock_guard<std::mutex> lock(chunksToSendMutex);
-            for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
-                chunksToSend.push({chunkPackets[i], chunkToGenerate.peer});
+            for (int i = 0; i < chunksToGenerateCount; i++) {
+                for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
+                    chunksToSend.push({chunkPackets[i][j], chunkToGenerate[i].peer});
+                }
             }
-            chunksGenerated += WorldConfig::CHUNK_COLUMN_HEIGHT;
+            chunksGenerated += WorldConfig::CHUNK_COLUMN_HEIGHT * chunksToGenerateCount;
         }
 
     }

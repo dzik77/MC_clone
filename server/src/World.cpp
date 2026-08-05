@@ -75,10 +75,11 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkCo
             //std::cout << normalizedNoise * maxHeight << " ";
             int height = continentalnessValue + (erosionValue * peaksAndValleysValue);
             height = std::clamp(height, 1, WorldConfig::MAX_HEIGHT - 1);
-            for (int y = 0; y < height; y++){
+            int fillHeight = std::max(height, waterLevel);
+            for (int y = 0; y <= fillHeight; y++){
                 int chunkY = y / WorldConfig::CHUNK_SIZE;
                 int localY = y % WorldConfig::CHUNK_SIZE;
-                chunkColumnPacket[chunkY].chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + localY * WorldConfig::CHUNK_SIZE + z] = Block::GRASS;
+                chunkColumnPacket[chunkY].chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + localY * WorldConfig::CHUNK_SIZE + z] = getBlockFromHeight(y, height);
             }
             //chunkColumn.Blocks[x][0][z] = 1;
             //chunkColumn.Blocks[x][63][z] = 2;

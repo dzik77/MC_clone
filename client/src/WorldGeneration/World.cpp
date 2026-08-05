@@ -9,7 +9,8 @@ const std::vector<std::filesystem::path> texturePaths = {
     "textures/dirt.png",
     "textures/grass_block_side.png",
     "textures/grass_block_top_item.png",
-    "textures/stone.png"
+    "textures/stone.png",
+    "textures/water_still.png"
 };
 
 
@@ -50,6 +51,39 @@ void World::initialize() {
     
     for (int i = 0; i < PREALLOCATE_CHUNKS; i++){
         freeChunkPositionIndices.push(i);
+    }
+
+    setRenderDistance(renderDistance);
+
+}
+
+void World::setRenderDistance(int distance) {
+
+    renderDistance = distance;
+    std::vector<std::vector<bool>> visited(renderDistance * 2 + 1, std::vector<bool>(renderDistance * 2 + 1, false));
+    chunksToLoadOffset.clear();
+
+    std::queue<std::pair<int,int>> q;
+    q.push({renderDistance, renderDistance});
+    visited[renderDistance][renderDistance] = true;
+
+    std::pair<int,int> offsets[4] = {{1,0},{-1,0},{0,1},{0,-1}};
+
+    while (!q.empty()) {
+        auto [x, y] = q.front();
+        q.pop();
+        if ((x - renderDistance) * (x - renderDistance) + (y - renderDistance) * (y - renderDistance) <= renderDistance * renderDistance) {
+            chunksToLoadOffset.push_back({x - renderDistance, y - renderDistance});
+            for (auto [dx, dy] : offsets) {
+                int nx = x + dx;
+                int ny = y + dy;
+                if (nx >= 0 && nx < visited.size() && ny >= 0 && ny < visited[0].size() && !visited[nx][ny]) {
+                    visited[nx][ny] = true;
+                    q.push({nx, ny});
+                }
+            }
+        }
+
     }
 
 }
@@ -255,27 +289,24 @@ void World::loadChunks(glm::vec3 playerPosition) {
             toRemove.push_back(i);
         }
     }
-    for (int x = -renderDistance; x <= renderDistance; x++){
-        for (int z = -renderDistance; z <= renderDistance; z++){
-            if(x*x + z*z > renderDistance*renderDistance) 
-                continue;
-            if (loadedChunkPositions.find(std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)) == loadedChunkPositions.end()){
-                if (toRemove.size() > 0){
-                    int idx = toRemove.back();
-                    toRemove.pop_back();
-                    for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
-                        freeChunkPositionIndices.push(ChunkColumns[idx].chunks[j].ssboIndex);
-                    }
-                    loadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
-                    uploadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
-                    ChunkColumns[idx] = ChunkColumn(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
-                    generateTerrain(ChunkColumns[idx]);
-                    loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = idx;
-                } else {
-                    ChunkColumns.emplace_back(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
-                    generateTerrain(ChunkColumns.back());
-                    loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = ChunkColumns.size()-1;
+
+    for (auto [x,z] : chunksToLoadOffset){
+        if (loadedChunkPositions.find(std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)) == loadedChunkPositions.end()){
+            if (toRemove.size() > 0){
+                int idx = toRemove.back();
+                toRemove.pop_back();
+                for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
+                    freeChunkPositionIndices.push(ChunkColumns[idx].chunks[j].ssboIndex);
                 }
+                loadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
+                uploadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
+                ChunkColumns[idx] = ChunkColumn(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
+                generateTerrain(ChunkColumns[idx]);
+                loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = idx;
+            } else {
+                ChunkColumns.emplace_back(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
+                generateTerrain(ChunkColumns.back());
+                loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = ChunkColumns.size()-1;
             }
         }
     }

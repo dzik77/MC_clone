@@ -48,7 +48,8 @@ class Server{
 
         // World generation
         std::vector<std::thread> chunkGenerationThreads;
-        int numChunkGenerationThreads = 5;
+        const int numChunkGenerationThreads = 5;
+        const int chunkToGeneratePerThread = 20;
         World world;
 
         std::queue<ChunkToGenerate> chunksToGenerate;

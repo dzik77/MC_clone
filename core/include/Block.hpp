@@ -2,12 +2,21 @@
 #include <cstdint>
 #include <Direction.hpp>
 
+constexpr uint8_t TRANSPARENCY_THRESHOLD = 255;
 enum class Block: uint8_t {
-    AIR,
-    DIRT,
-    GRASS,
-    STONE
+    AIR = 0,
+    DIRT = 1,
+    GRASS = 2,
+    STONE = 3,
+    WATER = 255
 };
+
+inline bool isSolid(Block block){
+    return (uint8_t)block < TRANSPARENCY_THRESHOLD;
+}
+inline bool isTransparent(Block block){
+    return (uint8_t)block >= TRANSPARENCY_THRESHOLD;
+}
 
 inline int getTextureID(Block block, Direction direction){
     switch (block) {
@@ -24,6 +33,8 @@ inline int getTextureID(Block block, Direction direction){
                 return 2;
         case Block::STONE:
             return 4;
+        case Block::WATER:
+            return 5;
     }
     return 0;
 }
