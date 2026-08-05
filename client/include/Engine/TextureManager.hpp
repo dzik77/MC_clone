@@ -5,7 +5,7 @@
 #include <glad/glad.h>
 #include <Engine/stb_image.h>
 
-#define fs std::filesystem
+namespace fs = std::filesystem;
 
 class TextureArray{
     public:
