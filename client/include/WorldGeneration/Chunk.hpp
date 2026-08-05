@@ -34,11 +34,13 @@ class Chunk{
         Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
         Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
         Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE]);   
-    int verticesCount = 0;
-    int indiciesCount = 0;
+    int verticesCountOpaque = 0;
+    int indiciesCountOpaque = 0;
+    int verticesCountTransparent = 0;
+    int indiciesCountTransparent = 0;
     uint32_t ssboIndex = -1;
     VramAllocator* vramAllocator;
-    BufferAllocation chunkAllocation;
+    BufferAllocation chunkAllocationOpaque, chunkAllocationTransparent;
 
     private:
 };

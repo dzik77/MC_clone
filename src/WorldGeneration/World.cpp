@@ -221,12 +221,12 @@ void World::render(Shader& shader) {
     std::vector<DrawElementsIndirectCommand> drawCommands;
     for (auto& chunkColumn : ChunkColumns){
         for (int i = 0; i < CHUNK_COLUMN_HEIGHT; i++){
-            if (chunkColumn.chunks[i].indiciesCount == 0 || chunkColumn.chunks[i].ssboIndex == -1) continue;
+            if (chunkColumn.chunks[i].indiciesCountOpaque == 0 || chunkColumn.chunks[i].ssboIndex == -1) continue;
             DrawElementsIndirectCommand cmd;
-            cmd.count = chunkColumn.chunks[i].indiciesCount;
+            cmd.count = chunkColumn.chunks[i].indiciesCountOpaque;
             cmd.instanceCount = 1;
-            cmd.firstIndex = chunkColumn.chunks[i].chunkAllocation.indexBlocks;
-            cmd.baseVertex = chunkColumn.chunks[i].chunkAllocation.vertexBlocks;
+            cmd.firstIndex = chunkColumn.chunks[i].chunkAllocationOpaque.indexBlocks;
+            cmd.baseVertex = chunkColumn.chunks[i].chunkAllocationOpaque.vertexBlocks;
             cmd.baseInstance = chunkColumn.chunks[i].ssboIndex;
             drawCommands.push_back(cmd);
         }

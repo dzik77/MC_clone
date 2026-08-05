@@ -12,7 +12,7 @@ enum class Block: uint8_t {
 };
 
 inline bool isSolid(Block block){
-    return (uint8_t)block < TRANSPARENCY_THRESHOLD;
+    return block != Block::AIR && (uint8_t)block < TRANSPARENCY_THRESHOLD;
 }
 inline bool isTransparent(Block block){
     return (uint8_t)block >= TRANSPARENCY_THRESHOLD;

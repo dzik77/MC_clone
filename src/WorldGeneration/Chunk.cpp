@@ -4,41 +4,41 @@
 
 Chunk::Chunk() {
     vramAllocator = nullptr;
-    chunkAllocation = {0, 0, 0, 0};
+    chunkAllocationOpaque = {0, 0, 0, 0};
 }
 Chunk::Chunk(VramAllocator* vramAllocator) : vramAllocator(vramAllocator) {
-    chunkAllocation = {0, 0, 0, 0};
+    chunkAllocationOpaque = {0, 0, 0, 0};
 }
 Chunk::Chunk(Chunk&& other) noexcept 
-    : verticesCount(other.verticesCount), indiciesCount(other.indiciesCount), ssboIndex(other.ssboIndex), vramAllocator(other.vramAllocator), chunkAllocation(other.chunkAllocation) {
+    : verticesCountOpaque(other.verticesCountOpaque), indiciesCountOpaque(other.indiciesCountOpaque), ssboIndex(other.ssboIndex), vramAllocator(other.vramAllocator), chunkAllocationOpaque(other.chunkAllocationOpaque) {
     other.vramAllocator = nullptr;
-    other.chunkAllocation = {0, 0, 0, 0};
-    other.verticesCount = 0;
-    other.indiciesCount = 0;
+    other.chunkAllocationOpaque = {0, 0, 0, 0};
+    other.verticesCountOpaque = 0;
+    other.indiciesCountOpaque = 0;
 }
 
 Chunk& Chunk::operator=(Chunk&& other) noexcept {
     if (this != &other) {
-        if (vramAllocator && (chunkAllocation.vertexCount > 0 || chunkAllocation.indexCount > 0)) {
-            vramAllocator->free(chunkAllocation);
+        if (vramAllocator && (chunkAllocationOpaque.vertexCount > 0 || chunkAllocationOpaque.indexCount > 0)) {
+            vramAllocator->free(chunkAllocationOpaque);
         }
-        verticesCount = other.verticesCount;
-        indiciesCount = other.indiciesCount;
+        verticesCountOpaque = other.verticesCountOpaque;
+        indiciesCountOpaque = other.indiciesCountOpaque;
         ssboIndex = other.ssboIndex;
-        chunkAllocation = other.chunkAllocation;
+        chunkAllocationOpaque = other.chunkAllocationOpaque;
         vramAllocator = other.vramAllocator;
 
         other.vramAllocator = nullptr;
-        other.chunkAllocation = {0, 0, 0, 0};
-        other.verticesCount = 0;
-        other.indiciesCount = 0;
+        other.chunkAllocationOpaque = {0, 0, 0, 0};
+        other.verticesCountOpaque = 0;
+        other.indiciesCountOpaque = 0;
     }
     return *this;
 }
 
 Chunk::~Chunk(){
-    if (vramAllocator && (chunkAllocation.vertexCount > 0 || chunkAllocation.indexCount > 0)) {
-        vramAllocator->free(chunkAllocation);
+    if (vramAllocator && (chunkAllocationOpaque.vertexCount > 0 || chunkAllocationOpaque.indexCount > 0)) {
+        vramAllocator->free(chunkAllocationOpaque);
     }
 }
 
@@ -125,19 +125,19 @@ void Chunk::generateMesh(
             }
         }
     }
-    indiciesCount = indicies.size();
-    verticesCount = vertices.size();
+    indiciesCountOpaque = indicies.size();
+    verticesCountOpaque = vertices.size();
 
-    if (chunkAllocation.vertexCount < vertices.size() || chunkAllocation.vertexCount < indicies.size()){
-        if (chunkAllocation.vertexBlocks > 0 && chunkAllocation.indexBlocks > 0){
-            vramAllocator->free(chunkAllocation);
+    if (chunkAllocationOpaque.vertexCount < vertices.size() || chunkAllocationOpaque.vertexCount < indicies.size()){
+        if (chunkAllocationOpaque.vertexBlocks > 0 && chunkAllocationOpaque.indexBlocks > 0){
+            vramAllocator->free(chunkAllocationOpaque);
         }
-        chunkAllocation = vramAllocator->allocate(verticesCount, indiciesCount);
+        chunkAllocationOpaque = vramAllocator->allocate(verticesCountOpaque, indiciesCountOpaque);
     }
     //std::memcpy(vramAllocator->getVertexData() + chunkAllocation.vertexBlocks, vertices.data(), verticesCount * sizeof(uint32_t));
     //std::memcpy(vramAllocator->getIndexData() + chunkAllocation.indexBlocks, indicies.data(), indiciesCount * sizeof(uint16_t));
-    glNamedBufferSubData(vramAllocator->getVertexBufferID(), chunkAllocation.vertexBlocks * sizeof(uint32_t), verticesCount * sizeof(uint32_t), vertices.data());
-    glNamedBufferSubData(vramAllocator->getIndexBufferID(), chunkAllocation.indexBlocks * sizeof(uint16_t), indiciesCount * sizeof(uint16_t), indicies.data());
+    glNamedBufferSubData(vramAllocator->getVertexBufferID(), chunkAllocationOpaque.vertexBlocks * sizeof(uint32_t), verticesCountOpaque * sizeof(uint32_t), vertices.data());
+    glNamedBufferSubData(vramAllocator->getIndexBufferID(), chunkAllocationOpaque.indexBlocks * sizeof(uint16_t), indiciesCountOpaque * sizeof(uint16_t), indicies.data());
 
 }
 

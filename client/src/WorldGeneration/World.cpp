@@ -44,7 +44,7 @@ void World::initialize() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, chunkSSBO);
     ssboData = (ChunkPosition*)glMapNamedBufferRange(chunkSSBO, 0, PREALLOCATE_CHUNKS * sizeof(ChunkPosition), GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
     
-    indirectCommandBufferSize = PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand) * 3;
+    indirectCommandBufferSize = PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand) * 4;
     glCreateBuffers(1, &indirectCommandBuffer);
     glNamedBufferStorage(indirectCommandBuffer, indirectCommandBufferSize, nullptr, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
     mappedIndirectCommands = (DrawElementsIndirectCommand*)glMapNamedBufferRange(indirectCommandBuffer, 0, indirectCommandBufferSize, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
@@ -332,58 +332,102 @@ void World::loadChunks(glm::vec3 playerPosition) {
     //std::cout << "Chunks loaded around player position: " << playerPosition.x << ", " << playerPosition.y << ", " << playerPosition.z << std::endl;
 }
 
-void World::render(Shader& shader) {
+void World::render(Shader& shader, glm::vec3 playerPosition) {
 
     static bool firstRender = true;
 
-    std::vector<DrawElementsIndirectCommand> drawCommands;
+    sortedChunkColumnsIndices.clear();
+    sortedChunkColumnsIndices = std::vector<int>(ChunkColumns.size());
+    std::iota(sortedChunkColumnsIndices.begin(), sortedChunkColumnsIndices.end(), 0);
+
+    // Sort back-to-front (farthest first) for correct transparent blending
+    std::sort(sortedChunkColumnsIndices.begin(), sortedChunkColumnsIndices.end(), [&](int a, int b) {
+        float distA = glm::distance(glm::vec2(ChunkColumns[a].position.x * WorldConfig::CHUNK_SIZE, ChunkColumns[a].position.y * WorldConfig::CHUNK_SIZE), glm::vec2(playerPosition.x, playerPosition.z));
+        float distB = glm::distance(glm::vec2(ChunkColumns[b].position.x * WorldConfig::CHUNK_SIZE, ChunkColumns[b].position.y * WorldConfig::CHUNK_SIZE), glm::vec2(playerPosition.x, playerPosition.z));
+        return distA > distB;
+    });
+
+    std::vector<DrawElementsIndirectCommand> drawCommandsOpaque;
     for (auto& chunkColumn : ChunkColumns){
         for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++){
-            if (chunkColumn.chunks[i].indiciesCount == 0 || chunkColumn.chunks[i].ssboIndex == -1) continue;
+            if (chunkColumn.chunks[i].indiciesCountOpaque == 0 || chunkColumn.chunks[i].ssboIndex == -1) continue;
             DrawElementsIndirectCommand cmd;
-            cmd.count = chunkColumn.chunks[i].indiciesCount;
+            cmd.count = chunkColumn.chunks[i].indiciesCountOpaque;
             cmd.instanceCount = 1;
-            cmd.firstIndex = chunkColumn.chunks[i].chunkAllocation.indexBlocks;
-            cmd.baseVertex = chunkColumn.chunks[i].chunkAllocation.vertexBlocks;
+            cmd.firstIndex = chunkColumn.chunks[i].chunkAllocationOpaque.indexBlocks;
+            cmd.baseVertex = chunkColumn.chunks[i].chunkAllocationOpaque.vertexBlocks;
             cmd.baseInstance = chunkColumn.chunks[i].ssboIndex;
-            drawCommands.push_back(cmd);
+            drawCommandsOpaque.push_back(cmd);
+        }
+    }
+
+    std::vector<DrawElementsIndirectCommand> drawCommandsTransparent;
+    for (auto i : sortedChunkColumnsIndices){
+        auto& chunkColumn = ChunkColumns[i];
+        for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++){
+            if (chunkColumn.chunks[j].indiciesCountTransparent == 0 || chunkColumn.chunks[j].ssboIndex == -1) continue;
+            DrawElementsIndirectCommand cmd;
+            cmd.count = chunkColumn.chunks[j].indiciesCountTransparent;
+            cmd.instanceCount = 1;
+            cmd.firstIndex = chunkColumn.chunks[j].chunkAllocationTransparent.indexBlocks;
+            cmd.baseVertex = chunkColumn.chunks[j].chunkAllocationTransparent.vertexBlocks;
+            cmd.baseInstance = chunkColumn.chunks[j].ssboIndex;
+            drawCommandsTransparent.push_back(cmd);
         }
     }
 
     static int currentFrame = 0;
-    int bufferIndex = currentFrame % 3;
+    int bufferIndex = currentFrame % 2;
     currentFrame++;
 
-    DrawElementsIndirectCommand* cmdPtr = mappedIndirectCommands + bufferIndex * PREALLOCATE_CHUNKS;
-    std::memcpy(cmdPtr, drawCommands.data(), drawCommands.size() * sizeof(DrawElementsIndirectCommand));
+    if (!drawCommandsOpaque.empty()) {
+        DrawElementsIndirectCommand* cmdPtrOpaque = mappedIndirectCommands + bufferIndex * PREALLOCATE_CHUNKS;
+        std::memcpy(cmdPtrOpaque, drawCommandsOpaque.data(), drawCommandsOpaque.size() * sizeof(DrawElementsIndirectCommand));
+    }
+
+    if (!drawCommandsTransparent.empty()) {
+        DrawElementsIndirectCommand* cmdPtrTransparent = mappedIndirectCommands + (2 + bufferIndex) * PREALLOCATE_CHUNKS;
+        std::memcpy(cmdPtrTransparent, drawCommandsTransparent.data(), drawCommandsTransparent.size() * sizeof(DrawElementsIndirectCommand));
+    }
 
     shader.use();
     glBindTextureUnit(0, textureArray.texture);
     glBindVertexArray(globalVAO);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectCommandBuffer);
 
+    // OPAQUE PASS
+    glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
 
-    /*
-    for (const auto& cmd : drawCommands) {
-        glDrawElementsInstancedBaseVertexBaseInstance(
+    if (!drawCommandsOpaque.empty()) {
+        glMultiDrawElementsIndirect(
             GL_TRIANGLES, 
-            cmd.count, 
             GL_UNSIGNED_SHORT, 
-            (void*)(cmd.firstIndex * sizeof(uint16_t)), // Byte offset in EBO
-            cmd.instanceCount, 
-            cmd.baseVertex, 
-            cmd.baseInstance
+            (void *)(bufferIndex * PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand)), 
+            drawCommandsOpaque.size(), 
+            0
         );
     }
-    */
-    glMultiDrawElementsIndirect(
-        GL_TRIANGLES, 
-        GL_UNSIGNED_SHORT, 
-        (void *)(bufferIndex * PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand)), 
-        drawCommands.size(), 
-        0
-    );
 
+    // TRANSPARENT PASS
+    if (!drawCommandsTransparent.empty()) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+
+        glMultiDrawElementsIndirect(
+            GL_TRIANGLES, 
+            GL_UNSIGNED_SHORT, 
+            (void *)((2 + bufferIndex) * PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand)), 
+            drawCommandsTransparent.size(), 
+            0
+        );
+    }
+
+    // Restore state for next frame (critical for glClear(GL_DEPTH_BUFFER_BIT) in main loop)
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
 }
 
 void World::clean(){

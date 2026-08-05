@@ -11,6 +11,7 @@
 #include <stack>
 #include <map>
 #include <queue>
+#include <numeric>
 
 #include <enet/enet.h>
 #include <PacketType.hpp>
@@ -26,7 +27,7 @@ class World{
         void loadTerrain();
         void generateMesh();
         void loadChunks(glm::vec3 playerPosition);
-        void render(Shader& shader);
+        void render(Shader& shader, glm::vec3 playerPosition);
         void clean();
         void setServerPeer(ENetPeer* peer) { serverPeer = peer; }
         ~World();
@@ -43,19 +44,28 @@ class World{
         void loadTextures();
         TextureArray textureArray;
         
+        // render distance
         int renderDistance = 32;
-        std::vector<std::pair<int,int>> chunksToLoadOffset;
+        std::vector<std::pair<int,int>> chunksToLoadOffset; // based on render distance, calculated in setRenderDistance
 
+        // allocator
         VramAllocator vramAllocator;
         GLuint globalVAO;
+        
+        // Chunks data proccesing
         std::vector<ChunkColumn> ChunkColumns;
+        std::vector<int> sortedChunkColumnsIndices; // sorted by distance to player, used for mesh generation
         std::stack<int> freeChunkPositionIndices;
         std::stack<int> chunksToGenerateMesh;
         std::set<int> chunksGeneratedOnEdge;
         std::map<std::pair<int, int>, int> loadedChunkPositions;
         std::map<std::pair<int, int>, int> uploadedChunkPositions;
+
+        // Shader Storage Buffer Object (SSBO) for chunk positions
         GLuint chunkSSBO;
         ChunkPosition* ssboData;
+
+        // Indirect draw commands buffer
         GLuint indirectCommandBuffer;
         DrawElementsIndirectCommand* mappedIndirectCommands;
         size_t indirectCommandBufferSize;

@@ -134,7 +134,7 @@ void Game::run() {
 
         world.loadChunks(camera.getPosition());
         world.generateMesh();
-        world.render(shader);
+        world.render(shader, camera.getPosition());
         
         // networking
         networking.pollEvents();
