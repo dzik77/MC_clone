@@ -26,6 +26,7 @@ FetchContent_Declare(
   GIT_TAG master
 )
 FetchContent_MakeAvailable(enet)
+target_include_directories(enet PUBLIC ${enet_SOURCE_DIR}/include)
 
 # GLM (Header-only)
 FetchContent_Declare(
