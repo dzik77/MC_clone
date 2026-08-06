@@ -11,6 +11,7 @@
 #include <PacketType.hpp>
 #include <condition_variable>
 #include <syncstream>
+#include <map>
 
 struct ChunkToGenerate {
     int x;
@@ -38,6 +39,9 @@ class Server{
         ENetAddress address;
         void handlePacket(ENetEvent& event);
 
+        // Client management
+        std::map<ENetPeer, int> connectedClients;
+        
         // Console input handling
 
         std::thread consoleThread;

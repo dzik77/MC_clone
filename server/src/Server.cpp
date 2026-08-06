@@ -40,6 +40,7 @@ void Server::run() {
                               << event.peer->address.host << ":" << event.peer->address.port
                               << std::endl;
                     event.peer->data = (void*)"Player 1";
+                    connectedClients[event.peer] = 1;
                     break;
                 case ENET_EVENT_TYPE_RECEIVE:
                     handlePacket(event);
