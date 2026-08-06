@@ -36,6 +36,9 @@ class Game{
 
         Networking networking;
 
+        //physics
+        bool physics = true;
+
         // ui inputs
         bool focus = true;
 

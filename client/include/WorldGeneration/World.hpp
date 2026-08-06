@@ -12,13 +12,14 @@
 #include <map>
 #include <queue>
 #include <numeric>
+#include <IWorldAccesor.hpp>
 
 #include <enet/enet.h>
 #include <PacketType.hpp>
 
 constexpr int PREALLOCATE_CHUNKS = 150000;
 
-class World{
+class World : IWorldAccessor {
     public:
     
         World();
@@ -60,6 +61,9 @@ class World{
         std::set<int> chunksGeneratedOnEdge;
         std::map<std::pair<int, int>, int> loadedChunkPositions;
         std::map<std::pair<int, int>, int> uploadedChunkPositions;
+
+        // IWorldAccessor implementation
+        Block getBlockAt(const glm::ivec3& position) const override;
 
         // Shader Storage Buffer Object (SSBO) for chunk positions
         GLuint chunkSSBO;

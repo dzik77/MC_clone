@@ -1,5 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <IWorldAccesor.hpp>
+#include <Block.hpp>
 
 struct AABB{
     glm::vec3 min, max;
@@ -15,6 +17,8 @@ struct Entity {
     glm::vec3 velocity;
     AABB boundingBox;
 };
+
+void updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAccessor);
 
 class PhysicsEngine {
 

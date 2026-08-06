@@ -182,6 +182,8 @@ void Game::processInput(float deltaTime) {
     } else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS){
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         focus = true;
+    } else if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS){
+        physics = !physics;
     }
 }
 

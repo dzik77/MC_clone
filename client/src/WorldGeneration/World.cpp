@@ -425,6 +425,23 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
     glDisable(GL_BLEND);
 }
 
+Block World::getBlockAt(const glm::ivec3& position) const {
+
+    int chunkColumnX = std::floor(static_cast<float>(position.x) / WorldConfig::CHUNK_SIZE);
+    int chunkColumnZ = std::floor(static_cast<float>(position.z) / WorldConfig::CHUNK_SIZE);
+    auto it = loadedChunkPositions.find({chunkColumnX, chunkColumnZ});
+    if (it == loadedChunkPositions.end()) {
+        return Block::AIR; // Chunk column not loaded
+    }
+    if (position.y < 0 || position.y >= WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT) {
+        return Block::AIR; // Y position out of bounds
+    }
+    int chunkPosX = position.x % WorldConfig::CHUNK_SIZE;
+    int chunkPosZ = position.z % WorldConfig::CHUNK_SIZE;   
+    return ChunkColumns[it->second].blocks[chunkPosX][position.y][chunkPosZ];
+
+}
+
 void World::clean(){
     ChunkColumns.clear();
     textureArray.clean();
