@@ -15,10 +15,15 @@ struct AABB{
 struct Entity {
     glm::vec3 position;
     glm::vec3 velocity;
+    bool onGround = false;
     AABB boundingBox;
 };
 
-void updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAccessor);
+glm::vec3 updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAccessor);
+bool checkOnGround(const Entity& entity, const IWorldAccessor& worldAccessor);
+
+constexpr float gravity = -32.0f; // m/s^2
+void applyGravity(Entity& entity, float deltaTime);
 
 class PhysicsEngine {
 

@@ -13,6 +13,7 @@
 #include <string>
 #include <Engine/stb_image.h>
 #include <Engine/Networking.hpp>
+#include <Engine/Player.hpp>
 
 #define DEBUG
 //#define AZDO_RENDERING
@@ -26,7 +27,6 @@ class Game{
 
     private:
 
-        Camera camera;
         GLFWwindow* window;
         World world;
         glm::mat4 projection;
@@ -35,6 +35,9 @@ class Game{
         Shader shader;
 
         Networking networking;
+
+        // Main Player
+        Player player;
 
         //physics
         bool physics = true;

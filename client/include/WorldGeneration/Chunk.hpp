@@ -6,11 +6,23 @@
 #include <Engine/VramAllocator.hpp>
 #include <utility>
 #include <Block.hpp>
+#include <atomic>
+#include <memory>
+#include <mutex>
 
 struct ChunkPosition{
     glm::vec4 position;
 };
 
+class ChunkColumn;
+
+void generateMeshForChunkThreadSafe(
+    std::shared_ptr<ChunkColumn> chunk, int columnHeight,
+    std::shared_ptr<ChunkColumn> blocks_Front,
+    std::shared_ptr<ChunkColumn> blocks_Back,
+    std::shared_ptr<ChunkColumn> blocks_Left,
+    std::shared_ptr<ChunkColumn> blocks_Right
+);
 
 class Chunk{
     public:
@@ -34,6 +46,17 @@ class Chunk{
         Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
         Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
         Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE]);   
+
+    // <-- Mesh data for GPU (needed for multi-threading) -->
+    std::vector<uint32_t> verticesOpaque, verticesTransparent;
+    std::vector<uint16_t> indiciesOpaque, indiciesTransparent;
+    bool isMeshGenerated = false; // Flag to indicate if the mesh has been generated
+    
+    bool hasMeshToUpload = false; // Flag to indicate if the mesh has been generated and needs to be uploaded to GPU (needs mutex)
+    int timeStamp = 0; // acquire meshMutex
+    std::mutex meshMutex; // Mutex to protect access to mesh data
+
+    // Mesh data
     int verticesCountOpaque = 0;
     int indiciesCountOpaque = 0;
     int verticesCountTransparent = 0;
@@ -76,6 +99,8 @@ class ChunkColumn{
     Chunk chunks[WorldConfig::CHUNK_COLUMN_HEIGHT];
     glm::vec2 position;
     VramAllocator* vramAllocator;
+
+    int loadedChunks = 0;
 
     private:
 };

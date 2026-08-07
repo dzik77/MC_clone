@@ -1,9 +1,11 @@
 #include <PhysicsEngine.hpp>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
 
-void updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAccessor) {
-    if (deltaTime <= 0.0f) return;
+glm::vec3 updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAccessor) {
+    glm::vec3 movementDelta(0.0f);
+    if (deltaTime <= 0.0f) return movementDelta;
 
     // -------------------------------------------------------------
     // 1. Y Axis Collision
@@ -65,6 +67,7 @@ void updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAc
         entity.boundingBox.min.y += dy;
         entity.boundingBox.max.y += dy;
         entity.position.y += dy;
+        movementDelta.y = dy;
     }
 
     // -------------------------------------------------------------
@@ -127,6 +130,7 @@ void updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAc
         entity.boundingBox.min.x += dx;
         entity.boundingBox.max.x += dx;
         entity.position.x += dx;
+        movementDelta.x = dx;
     }
 
     // -------------------------------------------------------------
@@ -189,5 +193,54 @@ void updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAc
         entity.boundingBox.min.z += dz;
         entity.boundingBox.max.z += dz;
         entity.position.z += dz;
+        movementDelta.z = dz;
     }
-}
+    
+    return movementDelta;
+}
+
+bool checkOnGround(const Entity &entity, const IWorldAccessor &worldAccessor) {
+    
+    AABB feetBox = entity.boundingBox;
+    feetBox.min.y -= 1e-3f;
+
+    int minX = static_cast<int>(std::floor(feetBox.min.x));
+    int maxX = static_cast<int>(std::floor(feetBox.max.x));
+    int minY = static_cast<int>(std::floor(feetBox.min.y));
+    int maxY = static_cast<int>(std::floor(feetBox.max.y));
+    int minZ = static_cast<int>(std::floor(feetBox.min.z));
+    int maxZ = static_cast<int>(std::floor(feetBox.max.z));
+
+    for (int x = minX; x <= maxX; ++x) {
+        for (int y = minY; y <= maxY; ++y) {
+            for (int z = minZ; z <= maxZ; ++z) {
+                Block block = worldAccessor.getBlockAt(glm::ivec3(x, y, z));
+                if (isSolid(block)) {
+                    AABB blockAABB;
+                    blockAABB.min = glm::vec3(x, y, z);
+                    blockAABB.max = glm::vec3(x + 1.0f, y + 1.0f, z + 1.0f);
+
+                    bool overlapX = (entity.boundingBox.min.x < blockAABB.max.x - 1e-4f && entity.boundingBox.max.x > blockAABB.min.x + 1e-4f);
+                    bool overlapZ = (entity.boundingBox.min.z < blockAABB.max.z - 1e-4f && entity.boundingBox.max.z > blockAABB.min.z + 1e-4f);
+
+                    if (overlapX && overlapZ && feetBox.min.y < blockAABB.max.y && feetBox.max.y >= blockAABB.max.y - 1e-4f) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+void applyGravity(Entity &entity, float deltaTime) {
+    if (!entity.onGround){
+        entity.velocity.y += gravity * deltaTime;
+
+        if (entity.velocity.y < -78.4f) {
+            entity.velocity.y = -78.4f;
+        }
+
+    }
+}

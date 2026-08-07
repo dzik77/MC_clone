@@ -110,6 +110,8 @@ void Game::run() {
     int frameCount = 0;
     float lastFPSmeasure = lastFrame;
 
+    world.startMeshGenerationThreads();
+
     while(!glfwWindowShouldClose(window)){
 
         currentFrame = glfwGetTime();
@@ -124,18 +126,27 @@ void Game::run() {
             lastFPSmeasure = currentFrame;
         }
 
+        //input
         processInput(deltaTime);
         
+        // render pipeline 
+
         glClearColor(0.2f,0.3f,0.3f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.setMat4("projection", projection);
-        shader.setMat4("view", camera.getView());
+        shader.setMat4("view", player.camera.getView());
 
-        world.loadChunks(camera.getPosition());
+        world.loadChunks(player.getPosition());
         world.generateMesh();
-        world.render(shader, camera.getPosition());
+        world.uploadChunksToGPU();
+        world.render(shader, player.getPosition());
         
+        // physics
+        if (physics){
+            player.updatePhysics(deltaTime, world);
+        }
+
         // networking
         networking.pollEvents();
 
@@ -146,6 +157,7 @@ void Game::run() {
         glfwPollEvents();
     }
     
+    world.stopMeshGenerationThreads();
 
 }
 
@@ -161,20 +173,27 @@ void Game::framebuffer_size_callback(GLFWwindow *window, int width, int height) 
     }
 }
 
-void Game::processInput(float deltaTime) {
+void Game::processInput(float deltaTime) {    
+
+    uint8_t input = 0;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
-        camera.KeyboardInput(Direction::FORWARD, deltaTime);
-    } else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
-        camera.KeyboardInput(Direction::BACKWARD, deltaTime);
-    } else if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
-        camera.KeyboardInput(Direction::LEFT, deltaTime);
-    } else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
-        camera.KeyboardInput(Direction::RIGHT, deltaTime);
-    } else if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS){
-        camera.KeyboardInput(Direction::UP, deltaTime);
-    } else if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS){
-        camera.KeyboardInput(Direction::DOWN, deltaTime);
-    } else if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
+        input |= 0b1; // W
+    } 
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
+        input |= 0b10; // S
+    } 
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
+        input |= 0b100; // A
+    } 
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
+        input |= 0b1000; // D
+    } 
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
+        input |= 0b10000; // SPACE
+    }
+    player.handleInput(input);
+
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
         glfwSetWindowShouldClose(window, true);
     } else if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS){
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -205,7 +224,7 @@ void Game::mouse_callback(GLFWwindow* window, double xpos, double ypos) {
         lastX = xpos;
         lastY =  ypos;
     
-        game->camera.MouseInput(xoffset, yoffset);
+        game->player.MouseInput(xoffset, yoffset);
     } else {
         firstCallback = true;
     }

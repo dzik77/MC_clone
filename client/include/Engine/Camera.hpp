@@ -17,8 +17,17 @@ class Camera{
         inline glm::mat4 getView(){
             return glm::lookAt(Position, Position + Front, Up);
         }
-        void KeyboardInput(Direction direction, float deltaTime);
-        void MouseInput(float xoffset, float yoffset);
+        void updateAngles(float Yaw, float Pitch){
+            this->Yaw = Yaw;
+            this->Pitch = Pitch;
+            updateVectors();
+        }
+        void setPosition(glm::vec3 position){
+            Position = position;
+        }
+        void updatePosition(glm::vec3 delta){
+            Position += delta;
+        }
         glm::vec3 getPosition(){
             return Position;
         }
@@ -26,7 +35,6 @@ class Camera{
     private:
 
         float 
-            MovementSpeed = 200.5f,
             MouseSensivity = 0.1f,
             Yaw = -90.0f,
             Pitch = 0.0f;

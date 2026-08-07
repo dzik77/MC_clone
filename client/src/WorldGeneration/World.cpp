@@ -63,20 +63,22 @@ void World::setRenderDistance(int distance) {
     std::vector<std::vector<bool>> visited(renderDistance * 2 + 1, std::vector<bool>(renderDistance * 2 + 1, false));
     chunksToLoadOffset.clear();
 
-    std::queue<std::pair<int,int>> q;
+    std::queue<glm::ivec2> q;
     q.push({renderDistance, renderDistance});
     visited[renderDistance][renderDistance] = true;
 
-    std::pair<int,int> offsets[4] = {{1,0},{-1,0},{0,1},{0,-1}};
+    glm::ivec2 offsets[4] = {{1,0},{-1,0},{0,1},{0,-1}};
 
     while (!q.empty()) {
-        auto [x, y] = q.front();
+        glm::ivec2 pos = q.front();
         q.pop();
+        int x = pos.x;
+        int y = pos.y;
         if ((x - renderDistance) * (x - renderDistance) + (y - renderDistance) * (y - renderDistance) <= renderDistance * renderDistance) {
             chunksToLoadOffset.push_back({x - renderDistance, y - renderDistance});
-            for (auto [dx, dy] : offsets) {
-                int nx = x + dx;
-                int ny = y + dy;
+            for (auto offset : offsets) {
+                int nx = x + offset.x;
+                int ny = y + offset.y;
                 if (nx >= 0 && nx < visited.size() && ny >= 0 && ny < visited[0].size() && !visited[nx][ny]) {
                     visited[nx][ny] = true;
                     q.push({nx, ny});
@@ -165,23 +167,23 @@ void World::loadTerrain() {
         auto chunkPacket = receivedChunks.front();
         receivedChunks.pop();
 
-        std::pair<int,int> chunkColumnPos = {chunkPacket.x, chunkPacket.z};
-        auto it = loadedChunkPositions.find(chunkColumnPos);
+        glm::ivec2 chunkColumnPos = {chunkPacket.x, chunkPacket.z};
+        auto it = chunkColumn.find(chunkColumnPos);
     
-        if (it == loadedChunkPositions.end()){
+        if (it == chunkColumn.end()){
             return; // chunk column not loaded, ignore
         }
     
         for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++) {
             for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++) {
                 for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++) {
-                    ChunkColumns[it->second].blocks[x][y + chunkPacket.y * WorldConfig::CHUNK_SIZE][z] = chunkPacket.chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + y * WorldConfig::CHUNK_SIZE + z];
+                    it->second->blocks[x][y + chunkPacket.y * WorldConfig::CHUNK_SIZE][z] = chunkPacket.chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + y * WorldConfig::CHUNK_SIZE + z];
                 }
             }
         }
-        uploadedChunkPositions[chunkColumnPos] += 1;
-        if (uploadedChunkPositions[chunkColumnPos] == WorldConfig::CHUNK_COLUMN_HEIGHT){
-            chunksToGenerateMesh.push(it->second);
+        it->second->loadedChunks++;
+        if (it->second->loadedChunks == WorldConfig::CHUNK_COLUMN_HEIGHT){
+            chunksToGenerateMesh.push(it->first);
         }
 
     }
@@ -191,85 +193,105 @@ void World::loadTerrain() {
 
 void World::generateMesh() {
 
+    static int timeStamp = 0;
+
+    int chunksPushed = 0;
+
+    
     while(!chunksGeneratedOnEdge.empty()){
-        int idx = *chunksGeneratedOnEdge.begin();
-        auto& chunkColumn = ChunkColumns[idx];
+        glm::ivec2 pos = *chunksGeneratedOnEdge.begin();
         chunksGeneratedOnEdge.erase(chunksGeneratedOnEdge.begin());
-        Block (*blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        auto it = loadedChunkPositions.find({chunkColumn.position.x-1, chunkColumn.position.y});
-        if (it != loadedChunkPositions.end()){
-            blocks_Left = ChunkColumns[it->second].blocks;
+        auto column = chunkColumn.find(pos);
+        if (column == chunkColumn.end()){
+            continue; // chunk column not loaded, ignore
         }
-        it = loadedChunkPositions.find({chunkColumn.position.x+1, chunkColumn.position.y});
-        if (it != loadedChunkPositions.end()){
-            blocks_Right = ChunkColumns[it->second].blocks;
+        std::shared_ptr<ChunkColumn> 
+        chunkColumFront(nullptr), 
+        chunkColumBack(nullptr), 
+        chunkColumLeft(nullptr), 
+        chunkColumRight(nullptr);
+        auto it = chunkColumn.find({pos.x-1, pos.y});
+        if (it != chunkColumn.end()){
+            chunkColumLeft = it->second;
         }
-        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y+1});
-        if (it != loadedChunkPositions.end()){
-            blocks_Front = ChunkColumns[it->second].blocks;
+        it = chunkColumn.find({pos.x+1, pos.y});
+        if (it != chunkColumn.end()){
+            chunkColumRight = it->second;
         }
-        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y-1});
-        if (it != loadedChunkPositions.end()){
-            blocks_Back = ChunkColumns[it->second].blocks;
+        it = chunkColumn.find({pos.x, pos.y+1});
+        if (it != chunkColumn.end()){
+            chunkColumFront = it->second;
         }
-        for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
-            chunkColumn.chunks[height].generateMesh(
-                chunkColumn.blocks, height,
-                blocks_Front,
-                blocks_Back,
-                blocks_Left,
-                blocks_Right
-            );
+        it = chunkColumn.find({pos.x, pos.y-1});
+        if (it != chunkColumn.end()){
+            chunkColumBack = it->second;
         }
+        
+        {
+            std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
+            for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
+                chunksToGenerateMeshQueue.push({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
+                chunksPushed++;
+            }
+        }
+        
+        
     }
+    
     while(!chunksToGenerateMesh.empty()){
-        int idx = chunksToGenerateMesh.top();
-        auto& chunkColumn = ChunkColumns[idx];
+
+        glm::ivec2 pos = chunksToGenerateMesh.top();
         chunksToGenerateMesh.pop();
-        Block (*blocks_Front)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        Block (*blocks_Back)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE] = nullptr;
-        auto it = loadedChunkPositions.find({chunkColumn.position.x-1, chunkColumn.position.y});
-        if (it != loadedChunkPositions.end()){
-            blocks_Left = ChunkColumns[it->second].blocks;
-            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
-                chunksGeneratedOnEdge.insert(it->second);
+        auto column = chunkColumn.find(pos);
+        if (column == chunkColumn.end()){
+            continue; // chunk column not loaded, ignore
+        }
+        std::shared_ptr<ChunkColumn> 
+            chunkColumFront(nullptr), 
+            chunkColumBack(nullptr), 
+            chunkColumLeft(nullptr), 
+            chunkColumRight(nullptr);
+        auto it = chunkColumn.find({pos.x-1, pos.y});
+        if (it != chunkColumn.end()){
+            chunkColumLeft = it->second;
+            if (chunksGeneratedOnEdge.find({pos.x-1, pos.y}) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert({pos.x-1, pos.y});
             }
         }
-        it = loadedChunkPositions.find({chunkColumn.position.x+1, chunkColumn.position.y});
-        if (it != loadedChunkPositions.end()){
-            blocks_Right = ChunkColumns[it->second].blocks;
-            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
-                chunksGeneratedOnEdge.insert(it->second);
+        it = chunkColumn.find({pos.x+1, pos.y});
+        if (it != chunkColumn.end()){
+            chunkColumRight = it->second;
+            if (chunksGeneratedOnEdge.find({pos.x+1, pos.y}) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert({pos.x+1, pos.y});
             }
         }
-        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y+1});
-        if (it != loadedChunkPositions.end()){
-            blocks_Front = ChunkColumns[it->second].blocks;
-            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
-                chunksGeneratedOnEdge.insert(it->second);
+        it = chunkColumn.find({pos.x, pos.y+1});
+        if (it != chunkColumn.end()){
+            chunkColumFront = it->second;
+            if (chunksGeneratedOnEdge.find({pos.x, pos.y+1}) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert({pos.x, pos.y+1});
             }
         }
-        it = loadedChunkPositions.find({chunkColumn.position.x, chunkColumn.position.y-1});
-        if (it != loadedChunkPositions.end()){
-            blocks_Back = ChunkColumns[it->second].blocks;
-            if (chunksGeneratedOnEdge.find(it->second) == chunksGeneratedOnEdge.end()){
-                chunksGeneratedOnEdge.insert(it->second);
+        it = chunkColumn.find({pos.x, pos.y-1});
+        if (it != chunkColumn.end()){
+            chunkColumBack = it->second;
+            if (chunksGeneratedOnEdge.find({pos.x, pos.y-1}) == chunksGeneratedOnEdge.end()){
+                chunksGeneratedOnEdge.insert({pos.x, pos.y-1});
             }
         }
-        for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
-            chunkColumn.chunks[height].generateMesh(
-                chunkColumn.blocks, height,
-                blocks_Front,
-                blocks_Back,
-                blocks_Left,
-                blocks_Right
-            );
+
+        {
+            std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
+            for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
+                chunksToGenerateMeshQueue.push({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
+            }
         }
+        
+    }
+
+
+    if (chunksPushed > 0){
+        chunksToGenerateMeshQueue_cv.notify_one();
     }
 
 }
@@ -277,64 +299,150 @@ void World::generateMesh() {
 void World::loadChunks(glm::vec3 playerPosition) {
     
     //std::cout << "Loading chunks around player position: " << playerPosition.x << ", " << playerPosition.y << ", " << playerPosition.z << std::endl;
-    glm::ivec3 chunkPosition(
+    glm::ivec2 chunkPosition(
         static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)),
-        0,
         static_cast<int>(std::floor(playerPosition.z / WorldConfig::CHUNK_SIZE))
     );
     int pt2 = 0;
-    std::vector<int> toRemove;
-    for (int i = 0; i < ChunkColumns.size(); i++){
-        if ( (ChunkColumns[i].position.x-chunkPosition.x) * (ChunkColumns[i].position.x-chunkPosition.x) + (ChunkColumns[i].position.y-chunkPosition.z) * (ChunkColumns[i].position.y-chunkPosition.z) > renderDistance*renderDistance){
-            toRemove.push_back(i);
+    for (auto it = chunkColumn.begin(); it != chunkColumn.end();) {
+        auto pos = it->first;
+        int x = pos.x;
+        int z = pos.y;
+        if ((x - chunkPosition.x) * (x - chunkPosition.x) + (z - chunkPosition.y) * (z - chunkPosition.y) > renderDistance * renderDistance) {
+            for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
+                freeChunkPositionIndices.push(it->second->chunks[j].ssboIndex);
+            }
+            it = chunkColumn.erase(it);
+        } else {
+            ++it;
         }
     }
 
-    sortedChunkColumnsIndices.clear();
-    for (auto [x,z] : chunksToLoadOffset){
-        if (loadedChunkPositions.find(std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)) == loadedChunkPositions.end()){
-            if (toRemove.size() > 0){
-                int idx = toRemove.back();
-                toRemove.pop_back();
-                for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
-                    freeChunkPositionIndices.push(ChunkColumns[idx].chunks[j].ssboIndex);
-                }
-                loadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
-                uploadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
-                ChunkColumns[idx] = ChunkColumn(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
-                generateTerrain(ChunkColumns[idx]);
-                loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = idx;
-                sortedChunkColumnsIndices.push_back(idx);
-            } else {
-                ChunkColumns.emplace_back(glm::vec2(chunkPosition.x + x, chunkPosition.z + z), &vramAllocator);
-                generateTerrain(ChunkColumns.back());
-                loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)] = ChunkColumns.size()-1;
-                sortedChunkColumnsIndices.push_back(ChunkColumns.size()-1);
-            }
-        } else {
-            sortedChunkColumnsIndices.push_back(loadedChunkPositions[std::pair<int,int>(chunkPosition.x + x, chunkPosition.z + z)]);
+    for (auto offset : chunksToLoadOffset){        
+        glm::ivec2 chunkColumnPos = offset + chunkPosition;
+        auto it = chunkColumn.find(chunkColumnPos);
+        if (it == chunkColumn.end()) {
+
+            chunkColumn[chunkColumnPos] = std::make_shared<ChunkColumn>(chunkColumnPos, &vramAllocator);
+            generateTerrain(*chunkColumn[chunkColumnPos]);
+
         }
     }
     
-    for (int i = (int)toRemove.size() - 1; i >= 0; i--){
-        int idx = toRemove[i];
-        for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
-            if (ChunkColumns[idx].chunks[j].ssboIndex != -1) {
-                freeChunkPositionIndices.push(ChunkColumns[idx].chunks[j].ssboIndex);
-                ChunkColumns[idx].chunks[j].ssboIndex = -1;
+}
+
+void World::meshGenerationWorkerThread() {
+
+    while (true) {
+
+        // Take job from queue
+        MeshJob job[meshesToGeneratePerThread];
+        int jobCount = 0;
+        {
+            std::unique_lock<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
+            chunksToGenerateMeshQueue_cv.wait(lock, [this] { return (!chunksToGenerateMeshQueue.empty() || !meshGenerationThreadsRunning); });
+            if (!meshGenerationThreadsRunning && chunksToGenerateMeshQueue.empty()) {
+                return; // Exit the thread if the flag is false and there are no more jobs
+            }
+            while (!chunksToGenerateMeshQueue.empty() && jobCount < meshesToGeneratePerThread) {
+                job[jobCount] = chunksToGenerateMeshQueue.front();
+                chunksToGenerateMeshQueue.pop();
+                jobCount++;
             }
         }
-        loadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
-        uploadedChunkPositions.erase(std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y));
-        
-        if (idx != ChunkColumns.size() - 1) {
-            int lastIdx = ChunkColumns.size() - 1;
-            ChunkColumns[idx] = std::move(ChunkColumns[lastIdx]);
-            loadedChunkPositions[std::pair<int,int>(ChunkColumns[idx].position.x, ChunkColumns[idx].position.y)] = idx;
+
+        // Generate meshes for the jobs
+        for (int i = 0; i < jobCount; i++) {
+            {
+                std::lock_guard<std::mutex> lock(job[i].chunkColumn->chunks[job[i].columnHeight].meshMutex);
+                if (job[i].chunkColumn->chunks[job[i].columnHeight].timeStamp > job[i].timestamp) {
+                    continue; // Skip this job if a newer job has already been processed for this chunk
+                }
+                job[i].chunkColumn->chunks[job[i].columnHeight].timeStamp = job[i].timestamp;
+                generateMeshForChunkThreadSafe(job[i].chunkColumn, job[i].columnHeight, job[i].chunkColumn_Front, job[i].chunkColumn_Back, job[i].chunkColumn_Left, job[i].chunkColumn_Right);
+                job[i].chunkColumn->chunks[job[i].columnHeight].hasMeshToUpload = true;
+            }
         }
-        ChunkColumns.pop_back();
+
+        // Send back meshed to be uploaded to GPU
+        {
+            std::lock_guard<std::mutex> lock(chunksToUploadToGPU_mutex);
+            for (int i = 0; i < jobCount; i++) {
+                glm::ivec3 chunkPos(job[i].chunkColumn->position.x, job[i].columnHeight, job[i].chunkColumn->position.y);
+                chunksToUploadToGPU.push(chunkPos);
+            }
+        }
+
     }
-    //std::cout << "Chunks loaded around player position: " << playerPosition.x << ", " << playerPosition.y << ", " << playerPosition.z << std::endl;
+
+}
+
+void World::uploadChunksToGPU() {
+
+    std::lock_guard<std::mutex> lock(chunksToUploadToGPU_mutex);
+    int chunksUploadedThisFrame = 0;
+    while (!chunksToUploadToGPU.empty() && chunksUploadedThisFrame < chunksToUploadToGPUPerFrame) {
+        glm::ivec3 chunkPos = chunksToUploadToGPU.front();
+        chunksToUploadToGPU.pop();
+        auto it = chunkColumn.find({chunkPos.x, chunkPos.z});
+        if (it == chunkColumn.end()) {
+            continue; // chunk column not loaded, ignore
+        }
+        if (chunkPos.y < 0 || chunkPos.y >= WorldConfig::CHUNK_COLUMN_HEIGHT) {
+            continue; // invalid chunk height, ignore
+        }
+        auto &chunk = it->second->chunks[chunkPos.y];
+        if (chunk.ssboIndex == -1) {
+            continue; // chunk not assigned an SSBO index, ignore
+        }
+        
+        std::lock_guard<std::mutex> lock(chunk.meshMutex);
+
+        if (!chunk.hasMeshToUpload) {
+            continue; // no mesh to upload, ignore
+        }
+
+        chunk.indiciesCountOpaque = chunk.indiciesOpaque.size();
+        chunk.verticesCountOpaque = chunk.verticesOpaque.size();
+
+        if (chunk.verticesCountOpaque > 0) {
+            if (chunk.chunkAllocationOpaque.vertexCount < chunk.verticesOpaque.size() || chunk.chunkAllocationOpaque.indexCount < chunk.indiciesOpaque.size()){
+                if (chunk.chunkAllocationOpaque.vertexBlocks > 0 && chunk.chunkAllocationOpaque.indexBlocks > 0){
+                    vramAllocator.free(chunk.chunkAllocationOpaque);
+                }
+                chunk.chunkAllocationOpaque = vramAllocator.allocate(chunk.verticesCountOpaque, chunk.indiciesCountOpaque);
+            }
+            glNamedBufferSubData(vramAllocator.getVertexBufferID(), chunk.chunkAllocationOpaque.vertexBlocks * sizeof(uint32_t), chunk.verticesCountOpaque * sizeof(uint32_t), chunk.verticesOpaque.data());
+            glNamedBufferSubData(vramAllocator.getIndexBufferID(), chunk.chunkAllocationOpaque.indexBlocks * sizeof(uint16_t), chunk.indiciesCountOpaque * sizeof(uint16_t), chunk.indiciesOpaque.data());
+        }
+
+        chunk.indiciesCountTransparent = chunk.indiciesTransparent.size();
+        chunk.verticesCountTransparent = chunk.verticesTransparent.size();
+
+        if (chunk.verticesCountTransparent > 0) {
+            if (chunk.chunkAllocationTransparent.vertexCount < chunk.verticesTransparent.size() || chunk.chunkAllocationTransparent.indexCount < chunk.indiciesTransparent.size()){
+                if (chunk.chunkAllocationTransparent.vertexBlocks > 0 && chunk.chunkAllocationTransparent.indexBlocks > 0){
+                    vramAllocator.free(chunk.chunkAllocationTransparent);
+                }
+                chunk.chunkAllocationTransparent = vramAllocator.allocate(chunk.verticesCountTransparent, chunk.indiciesCountTransparent);
+            }
+            glNamedBufferSubData(vramAllocator.getVertexBufferID(), chunk.chunkAllocationTransparent.vertexBlocks * sizeof(uint32_t), chunk.verticesCountTransparent * sizeof(uint32_t), chunk.verticesTransparent.data());
+            glNamedBufferSubData(vramAllocator.getIndexBufferID(), chunk.chunkAllocationTransparent.indexBlocks * sizeof(uint16_t), chunk.indiciesCountTransparent * sizeof(uint16_t), chunk.indiciesTransparent.data());
+        }
+
+        //std::cout << "Uploaded chunk at position: (" << chunkPos.x << ", " << chunkPos.y << ", " << chunkPos.z << ") to GPU. Opaque vertices: " << chunk.verticesCountOpaque << ", Opaque indices: " << chunk.indiciesCountOpaque << ", Transparent vertices: " << chunk.verticesCountTransparent << ", Transparent indices: " << chunk.indiciesCountTransparent << std::endl;
+
+        chunk.verticesOpaque.clear();
+        chunk.indiciesOpaque.clear();
+        chunk.verticesTransparent.clear();
+        chunk.indiciesTransparent.clear();
+
+        chunk.isMeshGenerated = true;
+        chunk.hasMeshToUpload = false; // Reset the flag after uploading to GPU
+
+        chunksUploadedThisFrame++;
+    }
+    
 }
 
 void World::render(Shader& shader, glm::vec3 playerPosition) {
@@ -342,31 +450,37 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
     static bool firstRender = true;
 
     std::vector<DrawElementsIndirectCommand> drawCommandsOpaque;
-    for (auto it = sortedChunkColumnsIndices.begin(); it != sortedChunkColumnsIndices.end(); ++it){
-        auto& chunkColumn = ChunkColumns[*it];
+    for (auto offset : chunksToLoadOffset){
+        glm::ivec2 chunkColumnPos  = {static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)) + offset.x, static_cast<int>(std::floor(playerPosition.z / WorldConfig::CHUNK_SIZE)) + offset.y};
+        auto it = chunkColumn.find(chunkColumnPos);
+        if (it == chunkColumn.end()) continue; // chunk column not loaded, ignore
+        auto& chunkColumn = it->second;
         for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++){
-            if (chunkColumn.chunks[i].indiciesCountOpaque == 0 || chunkColumn.chunks[i].ssboIndex == -1) continue;
+            if (chunkColumn->chunks[i].indiciesCountOpaque == 0 || chunkColumn->chunks[i].ssboIndex == -1 || !chunkColumn->chunks[i].isMeshGenerated) continue;
             DrawElementsIndirectCommand cmd;
-            cmd.count = chunkColumn.chunks[i].indiciesCountOpaque;
+            cmd.count = chunkColumn->chunks[i].indiciesCountOpaque;
             cmd.instanceCount = 1;
-            cmd.firstIndex = chunkColumn.chunks[i].chunkAllocationOpaque.indexBlocks;
-            cmd.baseVertex = chunkColumn.chunks[i].chunkAllocationOpaque.vertexBlocks;
-            cmd.baseInstance = chunkColumn.chunks[i].ssboIndex;
+            cmd.firstIndex = chunkColumn->chunks[i].chunkAllocationOpaque.indexBlocks;
+            cmd.baseVertex = chunkColumn->chunks[i].chunkAllocationOpaque.vertexBlocks;
+            cmd.baseInstance = chunkColumn->chunks[i].ssboIndex;
             drawCommandsOpaque.push_back(cmd);
         }
     }
 
     std::vector<DrawElementsIndirectCommand> drawCommandsTransparent;
-    for (auto it = sortedChunkColumnsIndices.rbegin(); it != sortedChunkColumnsIndices.rend(); ++it){
-        auto& chunkColumn = ChunkColumns[*it];
+    for (auto offset = chunksToLoadOffset.rbegin(); offset != chunksToLoadOffset.rend(); ++offset){
+        glm::ivec2 chunkColumnPos  = {static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)) + offset->x, static_cast<int>(std::floor(playerPosition.z / WorldConfig::CHUNK_SIZE)) + offset->y};
+        auto it = chunkColumn.find(chunkColumnPos);
+        if (it == chunkColumn.end()) continue; // chunk column not loaded, ignore
+        auto& chunkColumn = it->second;
         for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++){
-            if (chunkColumn.chunks[j].indiciesCountTransparent == 0 || chunkColumn.chunks[j].ssboIndex == -1) continue;
+            if (chunkColumn->chunks[j].indiciesCountTransparent == 0 || chunkColumn->chunks[j].ssboIndex == -1 || !chunkColumn->chunks[j].isMeshGenerated) continue;
             DrawElementsIndirectCommand cmd;
-            cmd.count = chunkColumn.chunks[j].indiciesCountTransparent;
+            cmd.count = chunkColumn->chunks[j].indiciesCountTransparent;
             cmd.instanceCount = 1;
-            cmd.firstIndex = chunkColumn.chunks[j].chunkAllocationTransparent.indexBlocks;
-            cmd.baseVertex = chunkColumn.chunks[j].chunkAllocationTransparent.vertexBlocks;
-            cmd.baseInstance = chunkColumn.chunks[j].ssboIndex;
+            cmd.firstIndex = chunkColumn->chunks[j].chunkAllocationTransparent.indexBlocks;
+            cmd.baseVertex = chunkColumn->chunks[j].chunkAllocationTransparent.vertexBlocks;
+            cmd.baseInstance = chunkColumn->chunks[j].ssboIndex;
             drawCommandsTransparent.push_back(cmd);
         }
     }
@@ -429,24 +543,24 @@ Block World::getBlockAt(const glm::ivec3& position) const {
 
     int chunkColumnX = std::floor(static_cast<float>(position.x) / WorldConfig::CHUNK_SIZE);
     int chunkColumnZ = std::floor(static_cast<float>(position.z) / WorldConfig::CHUNK_SIZE);
-    auto it = loadedChunkPositions.find({chunkColumnX, chunkColumnZ});
-    if (it == loadedChunkPositions.end()) {
+    auto it = chunkColumn.find({chunkColumnX, chunkColumnZ});
+    if (it == chunkColumn.end()) {
         return Block::AIR; // Chunk column not loaded
     }
     if (position.y < 0 || position.y >= WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT) {
         return Block::AIR; // Y position out of bounds
     }
-    int chunkPosX = position.x % WorldConfig::CHUNK_SIZE;
-    int chunkPosZ = position.z % WorldConfig::CHUNK_SIZE;   
-    return ChunkColumns[it->second].blocks[chunkPosX][position.y][chunkPosZ];
+    int chunkPosX = position.x - chunkColumnX * WorldConfig::CHUNK_SIZE;
+    int chunkPosZ = position.z - chunkColumnZ * WorldConfig::CHUNK_SIZE;
+    return it->second->blocks[chunkPosX][position.y][chunkPosZ];
 
 }
 
 void World::clean(){
-    ChunkColumns.clear();
+    chunkColumn.clear();
     textureArray.clean();
 }
 
 World::~World() {
-    ChunkColumns.clear();
+    chunkColumn.clear();
 }

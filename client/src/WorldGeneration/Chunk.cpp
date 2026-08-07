@@ -73,9 +73,6 @@ void Chunk::generateMesh(
         Block (*blocks_Left)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE],
         Block (*blocks_Right)[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE])       {
     
-    std::vector<uint32_t> verticesOpaque, verticesTransparent;
-    std::vector<uint16_t> indiciesOpaque, indiciesTransparent;
-    
     int yOffset = columnHeight * WorldConfig::CHUNK_SIZE;
 
     auto getNeighborLeft = [&](int x, int y, int z) -> Block {
@@ -245,6 +242,12 @@ void Chunk::generateMesh(
         glNamedBufferSubData(vramAllocator->getIndexBufferID(), chunkAllocationTransparent.indexBlocks * sizeof(uint16_t), indiciesCountTransparent * sizeof(uint16_t), indiciesTransparent.data());
     }
 
+    // this function is non-thread safe so we can erase GPU data
+    verticesOpaque.clear();
+    indiciesOpaque.clear();
+    verticesTransparent.clear();
+    indiciesTransparent.clear();
+
 }
 
 ChunkColumn::ChunkColumn(glm::vec2 position, VramAllocator* vramAllocator) 
@@ -279,4 +282,167 @@ ChunkColumn &ChunkColumn::operator=(ChunkColumn &&other) noexcept
         }
     }
     return *this;
+}
+
+void generateMeshForChunkThreadSafe(
+    std::shared_ptr<ChunkColumn> chunkColumn, int columnHeight,
+    std::shared_ptr<ChunkColumn> chunkColumn_Front,
+    std::shared_ptr<ChunkColumn> chunkColumn_Back,
+    std::shared_ptr<ChunkColumn> chunkColumn_Left,
+    std::shared_ptr<ChunkColumn> chunkColumn_Right) {
+    
+    if (!chunkColumn) return;
+
+    Chunk& targetChunk = chunkColumn->chunks[columnHeight];
+    int yOffset = columnHeight * WorldConfig::CHUNK_SIZE;
+
+    targetChunk.verticesOpaque.clear();
+    targetChunk.indiciesOpaque.clear();
+    targetChunk.verticesTransparent.clear();
+    targetChunk.indiciesTransparent.clear();
+
+    auto getNeighborLeft = [&](int x, int y, int z) -> Block {
+        if (x == 0) return chunkColumn_Left ? chunkColumn_Left->blocks[WorldConfig::CHUNK_SIZE - 1][y + yOffset][z] : Block::AIR;
+        return chunkColumn->blocks[x - 1][y + yOffset][z];
+    };
+
+    auto getNeighborRight = [&](int x, int y, int z) -> Block {
+        if (x == WorldConfig::CHUNK_SIZE - 1) return chunkColumn_Right ? chunkColumn_Right->blocks[0][y + yOffset][z] : Block::AIR;
+        return chunkColumn->blocks[x + 1][y + yOffset][z];
+    };
+
+    auto getNeighborDown = [&](int x, int y, int z) -> Block {
+        if (y == 0) return (columnHeight == 0) ? Block::AIR : chunkColumn->blocks[x][y - 1 + yOffset][z];
+        return chunkColumn->blocks[x][y - 1 + yOffset][z];
+    };
+
+    auto getNeighborUp = [&](int x, int y, int z) -> Block {
+        if (y == WorldConfig::CHUNK_SIZE - 1) return (columnHeight == WorldConfig::CHUNK_COLUMN_HEIGHT - 1) ? Block::AIR : chunkColumn->blocks[x][y + 1 + yOffset][z];
+        return chunkColumn->blocks[x][y + 1 + yOffset][z];
+    };
+
+    auto getNeighborBack = [&](int x, int y, int z) -> Block {
+        if (z == 0) return chunkColumn_Back ? chunkColumn_Back->blocks[x][y + yOffset][WorldConfig::CHUNK_SIZE - 1] : Block::AIR;
+        return chunkColumn->blocks[x][y + yOffset][z - 1];
+    };
+
+    auto getNeighborFront = [&](int x, int y, int z) -> Block {
+        if (z == WorldConfig::CHUNK_SIZE - 1) return chunkColumn_Front ? chunkColumn_Front->blocks[x][y + yOffset][0] : Block::AIR;
+        return chunkColumn->blocks[x][y + yOffset][z + 1];
+    };
+
+    auto shouldAddFace = [](Block currentBlock, Block neighborBlock) -> bool {
+        if (isSolid(currentBlock)) {
+            return neighborBlock == Block::AIR || isTransparent(neighborBlock);
+        }
+        if (isTransparent(currentBlock)) {
+            return neighborBlock == Block::AIR;
+        }
+        return false;
+    };
+    
+    for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
+        for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++){
+            for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
+                Block currentBlock = chunkColumn->blocks[x][y + yOffset][z];
+                if (currentBlock == Block::AIR) continue;
+
+                std::vector<uint32_t>* targetVertices = nullptr;
+                std::vector<uint16_t>* targetIndices = nullptr;
+
+                if (isSolid(currentBlock)) {
+                    targetVertices = &targetChunk.verticesOpaque;
+                    targetIndices = &targetChunk.indiciesOpaque;
+                } else if (isTransparent(currentBlock)) {
+                    targetVertices = &targetChunk.verticesTransparent;
+                    targetIndices = &targetChunk.indiciesTransparent;
+                } else {
+                    continue;
+                }
+
+                // LEFT
+                Block leftNeighbor = getNeighborLeft(x, y, z);
+                if (shouldAddFace(currentBlock, leftNeighbor)){
+                    uint32_t idx = targetVertices->size();
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 0));   // TL
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 1)); // TR
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 3));     // BL
+                    
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                }
+
+                // RIGHT
+                Block rightNeighbor = getNeighborRight(x, y, z);
+                if (shouldAddFace(currentBlock, rightNeighbor)){
+                    uint32_t idx = targetVertices->size();
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 0)); // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 1));   // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 2));     // BR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 3));   // BL
+                    
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                }
+
+                // DOWN
+                Block downNeighbor = getNeighborDown(x, y, z);
+                if (shouldAddFace(currentBlock, downNeighbor)){
+                    uint32_t idx = targetVertices->size();
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 0));   // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 1)); // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 3));     // BL
+                    
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                }
+
+                // UP
+                Block upNeighbor = getNeighborUp(x, y, z);
+                if (shouldAddFace(currentBlock, upNeighbor)){
+                    uint32_t idx = targetVertices->size();
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 0));     // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 1));   // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 2)); // BR
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 3));   // BL
+                    
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                }
+
+                // BACKWARD
+                Block backNeighbor = getNeighborBack(x, y, z);
+                if (shouldAddFace(currentBlock, backNeighbor)){
+                    uint32_t idx = targetVertices->size();
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 0)); // TL
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 1));   // TR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 2));     // BR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 3));   // BL
+                    
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                }
+
+                // FORWARD
+                Block frontNeighbor = getNeighborFront(x, y, z);
+                if (shouldAddFace(currentBlock, frontNeighbor)){
+                    uint32_t idx = targetVertices->size();
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 0)); // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 1)); // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 3));     // BL
+                    
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                }
+            }
+        }
+    }
+    
+    targetChunk.indiciesCountOpaque = targetChunk.indiciesOpaque.size();
+    targetChunk.verticesCountOpaque = targetChunk.verticesOpaque.size();
+    targetChunk.indiciesCountTransparent = targetChunk.indiciesTransparent.size();
+    targetChunk.verticesCountTransparent = targetChunk.verticesTransparent.size();
 }
