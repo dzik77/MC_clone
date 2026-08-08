@@ -41,7 +41,7 @@ class World : public IWorldAccessor {
         }
     };
     ankerl::unordered_dense::map<glm::ivec2, std::unique_ptr<ChunkColumn>, IVec2Hash> chunkColumns;
-    mutable std::mutex chunkColumnsMutex; // Mutex for thread-safe access to chunkColumns
+    std::mutex chunkColumnsMutex; // Mutex for thread-safe access to chunkColumns
 
     Block getBlockAt(const glm::ivec3& position) const override;
 

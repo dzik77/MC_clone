@@ -23,6 +23,8 @@ void Player::handleInput(uint8_t input) {
     }
     velocity = glm::vec3(movement.x, velocity.y, movement.z);
 
+    currentState.input = input;
+
 }
 
 void Player::MouseInput(float xoffset, float yoffset) {
@@ -32,6 +34,9 @@ void Player::MouseInput(float xoffset, float yoffset) {
 
     Pitch += yoffset;
     Yaw += xoffset;
+
+    currentState.xoffset = xoffset;
+    currentState.yoffset = yoffset;
 
     if (Pitch > 89.0f)
         Pitch = 89.0f;
@@ -52,5 +57,9 @@ void Player::updatePhysics(float deltaTime, const IWorldAccessor &worldAccessor)
     glm::vec3 movementDelta = updateEntity(*this, deltaTime, worldAccessor);
     onGround = checkOnGround(*this, worldAccessor);
     camera.updatePosition(movementDelta);
+    currentState.predictedPosition = position;
+    currentState.yaw = Yaw;
+    currentState.pitch = Pitch;
+    currentState.dt = deltaTime;
 
 }

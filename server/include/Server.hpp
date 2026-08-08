@@ -11,7 +11,9 @@
 #include <PacketType.hpp>
 #include <condition_variable>
 #include <syncstream>
-#include <map>
+#include <ankerl/unordered_dense.h>
+#include <Player.hpp>
+#include <PhysicsEngine.hpp>
 
 struct ChunkToGenerate {
     int x;
@@ -40,8 +42,13 @@ class Server{
         void handlePacket(ENetEvent& event);
 
         // Client management
-        std::map<ENetPeer, int> connectedClients;
-        
+        struct ENetAdressHash {
+            std::size_t operator()(const ENetAddress& k) const {
+                return std::hash<uint32_t>()(k.host) ^ (std::hash<uint16_t>()(k.port) << 1);
+            }
+        };
+        ankerl::unordered_dense::map<ENetAddress, Player, ENetAdressHash> connectedClients;
+
         // Console input handling
 
         std::thread consoleThread;

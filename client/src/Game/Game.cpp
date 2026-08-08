@@ -148,6 +148,7 @@ void Game::run() {
         }
 
         // networking
+        networking.sendPlayerMovePacket(player.getCurrentState());
         networking.pollEvents();
 
         // loading chunks from server

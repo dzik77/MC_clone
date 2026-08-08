@@ -39,6 +39,8 @@ void Server::run() {
                     std::cout << "A new client connected from "
                               << event.peer->address.host << ":" << event.peer->address.port
                               << std::endl;
+                    glm::vec3 initialPosition(0.0f, 80.0f, 0.0f);
+                    connectedClients[event.peer->address] = {event.peer, initialPosition, 0};
                     event.peer->data = (void*)"Player 1";
                     break;
                 case ENET_EVENT_TYPE_RECEIVE:
@@ -108,6 +110,41 @@ void Server::handlePacket(ENetEvent& event) {
             chunksToGenerateCV.notify_one();
     
             break;
+        }
+        case PacketType::PlayerMove: {
+
+            PlayerMovePacket* playerMovePacket = reinterpret_cast<PlayerMovePacket*>(event.packet->data);
+            auto it = connectedClients.find(event.peer->address);
+            if (it != connectedClients.end()) {
+                Player& player = it->second;
+                if (playerMovePacket->sequenceID > player.lastProcessedInputSequenceID){
+
+                    Entity entity;
+                    entity.position = player.position;
+                    entity.velocity = playerMovePacket->position - player.position;
+                    // assign AABB
+                    glm::vec3 deltaMovmemnt = updateEntity(entity, 0.05f, world);
+                    player.position += deltaMovmemnt;
+                    
+                    if (abs(player.position.x - playerMovePacket->position.x) > 0.1f || 
+                        abs(player.position.y - playerMovePacket->position.y) > 0.1f || 
+                        abs(player.position.z - playerMovePacket->position.z) > 0.1f) {
+                        // send server authoritative state packet
+                        ServerAuthoritativeStatePacket serverAuthoritativeStatePacket;
+                        serverAuthoritativeStatePacket.lastProcessedInputSequenceID = playerMovePacket->sequenceID;
+                        serverAuthoritativeStatePacket.truePosition = player.position;
+                        serverAuthoritativeStatePacket.wasRejected = true;
+
+                        ENetPacket* packet = enet_packet_create(&serverAuthoritativeStatePacket, sizeof(ServerAuthoritativeStatePacket), ENET_PACKET_FLAG_RELIABLE);
+                        enet_peer_send(event.peer, 0, packet);
+                    } else {
+                        player.lastProcessedInputSequenceID = playerMovePacket->sequenceID;
+                    }
+
+                }
+            }
+            break;
+
         }
         default:
         

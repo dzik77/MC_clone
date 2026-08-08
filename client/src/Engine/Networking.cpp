@@ -8,13 +8,31 @@ Networking::~Networking() {
     }
 }
 
-void Networking::initialize(std::queue<ChunkPacket> &receivedChunks) {
+void Networking::initialize(std::queue<ChunkPacket> &receivedChunks, Player &player, IWorldAccessor &worldAccessor) {
     this->receivedChunks = &receivedChunks;
+    this->player = player;
+    this->worldAccessor = worldAccessor;
     // network initialization
     client = enet_host_create(nullptr, 1, 2, 0, 0);
     if (client == nullptr) {
         throw std::runtime_error("Failed to create ENet client host.");
     }
+}
+
+void Networking::sendPlayerMovePacket(SavedClientState state) {
+
+    state.sequenceID = currentSequenceID++;
+
+    PlayerMovePacket packet;
+    packet.sequenceID = state.sequenceID;
+    packet.position = state.predictedPosition;
+
+    ENetPacket* enetPacket = enet_packet_create(&packet, sizeof(PlayerMovePacket), 0);
+    enet_peer_send(serverPeer, 1, enetPacket);
+    enet_packet_destroy(enetPacket);
+
+    clientStateHistory.push_back(state);
+
 }
 
 bool Networking::connectToServer(std::string ip)
@@ -78,6 +96,30 @@ void Networking::handleEvents(ENetEvent& event) {
     switch(packetType) {
         case PacketType::Chunk: {
             receivedChunks->push(*reinterpret_cast<ChunkPacket*>(event.packet->data));
+            break;
+        }
+        case PacketType::ServerAuthoritativeState: {
+
+            ServerAuthoritativeStatePacket* serverState = reinterpret_cast<ServerAuthoritativeStatePacket*>(event.packet->data);
+
+            while(!clientStateHistory.empty() && clientStateHistory.front().sequenceID <= serverState->lastProcessedInputSequenceID) {
+                clientStateHistory.pop_front();
+            }
+
+            if (serverState->wasRejected){
+
+                player.setPosition(serverState->truePosition);
+
+                for (auto& state : clientStateHistory) {
+                    player.setRotation(state.yaw, state.pitch);
+                    player.handleInput(state.input);
+                    player.MouseInput(state.xoffset, state.yoffset);
+                    player.updatePhysics(state.dt, worldAccessor);
+                    state.predictedPosition = player.getPosition();
+                }
+
+            }
+
             break;
         }
         default:

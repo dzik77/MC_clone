@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <PhysicsEngine.hpp>
 #include <Engine/Camera.hpp>
+#include <Engine/Networking.hpp>
 
 class Player : Entity {
 
@@ -42,12 +43,17 @@ class Player : Entity {
         glm::vec3 getFront() const {
             return Front;
         }
+        SavedClientState getCurrentState() const {
+            return currentState;
+        }
         
         void handleInput(uint8_t input);
         void MouseInput(float xoffset, float yoffset);
         void updatePhysics(float deltaTime, const IWorldAccessor& worldAccessor);
         
     private:
+        
+        SavedClientState currentState;
 
         glm::vec3 
             Front,
