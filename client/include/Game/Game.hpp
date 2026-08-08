@@ -14,6 +14,7 @@
 #include <Engine/stb_image.h>
 #include <Engine/Networking.hpp>
 #include <Engine/Player.hpp>
+#include <Engine/FreeCamera.hpp>
 
 #define DEBUG
 //#define AZDO_RENDERING
@@ -38,6 +39,8 @@ class Game{
 
         // Main Player
         Player player;
+        FreeCamera freeCamera;
+        bool freeCameraMode = false;
 
         //physics
         bool physics = true;

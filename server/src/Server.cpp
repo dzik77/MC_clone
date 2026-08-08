@@ -148,7 +148,7 @@ void Server::generateChunks(int threadId) {
 
         ChunkPacket chunkPackets[chunkToGeneratePerThread][WorldConfig::CHUNK_COLUMN_HEIGHT];
         for (int i = 0; i < chunksToGenerateCount; i++){
-            world.generateTerrain(glm::ivec2(chunkToGenerate[i].x, chunkToGenerate[i].z), chunkPackets[i]);
+            world.getTerrain(glm::ivec2(chunkToGenerate[i].x, chunkToGenerate[i].z), chunkPackets[i]);
         }
 
         {

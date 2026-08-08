@@ -86,6 +86,7 @@ class World : public IWorldAccessor {
             }
         };
         
+        glm::ivec2 lastPlayerChunkPosition = glm::ivec2(0, 0);
         ankerl::unordered_dense::map<glm::ivec2, std::shared_ptr<ChunkColumn>, IVec2Hash> chunkColumn;
         std::stack<int> freeChunkPositionIndices;
         std::stack<glm::ivec2> chunksToGenerateMesh;
@@ -105,7 +106,7 @@ class World : public IWorldAccessor {
         std::mutex chunksToGenerateMeshQueue_mutex;
         std::condition_variable chunksToGenerateMeshQueue_cv;
         const int meshesToGeneratePerThread = 10;
-        const int meshGenerationThreadCount = 2;
+        const int meshGenerationThreadCount = 4;
         bool meshGenerationThreadsRunning = true;
         void meshGenerationWorkerThread(); // Worker thread for mesh generation
         std::vector<std::thread> meshGenerationThreads;

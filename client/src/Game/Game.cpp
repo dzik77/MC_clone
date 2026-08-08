@@ -135,7 +135,7 @@ void Game::run() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.setMat4("projection", projection);
-        shader.setMat4("view", player.camera.getView());
+        shader.setMat4("view", (!freeCameraMode ? player.camera.getView() : freeCamera.getView()));
 
         world.loadChunks(player.getPosition());
         world.generateMesh();
@@ -143,7 +143,7 @@ void Game::run() {
         world.render(shader, player.getPosition());
         
         // physics
-        if (physics){
+        if (physics && !freeCameraMode){
             player.updatePhysics(deltaTime, world);
         }
 
@@ -151,6 +151,7 @@ void Game::run() {
         networking.pollEvents();
 
         // loading chunks from server
+
         world.loadTerrain();
 
         glfwSwapBuffers(window);
@@ -191,7 +192,14 @@ void Game::processInput(float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
         input |= 0b10000; // SPACE
     }
-    player.handleInput(input);
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
+        input |= 0b100000; // LEFT SHIFT
+    }
+    if (!freeCameraMode){
+        player.handleInput(input);
+    } else {
+        freeCamera.KeyboardInput(input, deltaTime);
+    }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){
         glfwSetWindowShouldClose(window, true);
@@ -203,6 +211,16 @@ void Game::processInput(float deltaTime) {
         focus = true;
     } else if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS){
         physics = !physics;
+    } else if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS){
+        if (!freeCameraMode){
+            freeCamera.setPosition(player.getPosition() + glm::vec3(0.0f, 1.62f, 0.0f));
+            freeCamera.setRotation(player.getYaw(), player.getPitch());
+            freeCameraMode = true;
+        } else {
+            player.setPosition(freeCamera.getPosition() - glm::vec3(0.0f, 1.62f, 0.0f));
+            player.setRotation(freeCamera.getYaw(), freeCamera.getPitch());
+            freeCameraMode = false;
+        }
     }
 }
 
@@ -223,8 +241,12 @@ void Game::mouse_callback(GLFWwindow* window, double xpos, double ypos) {
         double yoffset = lastY - ypos;
         lastX = xpos;
         lastY =  ypos;
-    
-        game->player.MouseInput(xoffset, yoffset);
+        
+        if (game->freeCameraMode){
+            game->freeCamera.MouseInput(xoffset, yoffset);
+        } else {
+            game->player.MouseInput(xoffset, yoffset);
+        }
     } else {
         firstCallback = true;
     }

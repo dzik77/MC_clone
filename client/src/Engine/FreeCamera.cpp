@@ -1,24 +1,24 @@
 #include <Engine/FreeCamera.hpp>
 
-void FreeCamera::KeyboardInput(Direction direction, float deltaTime) {
+void FreeCamera::KeyboardInput(uint8_t input, float deltaTime) {
     float Velocity = MovementSpeed * deltaTime;
-    switch(direction){
-        case Direction::FORWARD:
+    switch(input){
+        case 0b1: // W
             Position += Front * Velocity;
             break;
-        case Direction::BACKWARD:
+        case 0b10: // S
             Position -= Front * Velocity;
             break;
-        case Direction::RIGHT:
-            Position += Right * Velocity;
-            break;
-        case Direction::LEFT:
+        case 0b100: // A
             Position -= Right * Velocity;
             break;
-        case Direction::UP:
+        case 0b1000: // D
+            Position += Right * Velocity;
+            break;
+        case 0b10000: // SPACE
             Position += WorldUp * Velocity;
             break;
-        case Direction::DOWN:
+        case 0b100000: // LEFT SHIFT
             Position -= WorldUp * Velocity;
             break;
         default:

@@ -17,8 +17,22 @@ class FreeCamera{
         inline glm::mat4 getView(){
             return glm::lookAt(Position, Position + Front, Up);
         }
-        void KeyboardInput(Direction direction, float deltaTime);
+        void KeyboardInput(uint8_t input, float deltaTime);
         void MouseInput(float xoffset, float yoffset);
+        float getYaw() const {
+            return Yaw;
+        }
+        float getPitch() const {
+            return Pitch;
+        }
+        void setRotation(float yaw, float pitch){
+            Yaw = yaw;
+            Pitch = pitch;
+            updateVectors();
+        }
+        void setPosition(glm::vec3 position){
+            Position = position;
+        }
         glm::vec3 getPosition(){
             return Position;
         }

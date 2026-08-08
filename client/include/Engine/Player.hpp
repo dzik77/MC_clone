@@ -12,13 +12,24 @@ class Player : Entity {
             Front = glm::vec3(0.0f,0.0f,-1.0f);
             Right = glm::vec3(1.0f,0.0f,0.0f);
             WorldUp = glm::vec3(0.0f,1.0f,0.0f);
-            setPosition(glm::vec3(0.0f, 100.0f, 0.0f));
+            setPosition(glm::vec3(0.0f, 80.0f, 0.0f));
             onGround = false;
         }
         ~Player() {}
 
         Camera camera;
 
+        float getYaw() const {
+            return Yaw;
+        }
+        float getPitch() const {
+            return Pitch;
+        }
+        void setRotation(float yaw, float pitch) {
+            Yaw = yaw;
+            Pitch = pitch;
+            camera.updateAngles(Yaw, Pitch);
+        }
         void setPosition(glm::vec3 position) {
             this->position = position;
             camera.setPosition(position + glm::vec3(0.0f, 1.62f, 0.0f));

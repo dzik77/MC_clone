@@ -303,6 +303,12 @@ void World::loadChunks(glm::vec3 playerPosition) {
         static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)),
         static_cast<int>(std::floor(playerPosition.z / WorldConfig::CHUNK_SIZE))
     );
+
+    if (chunkPosition == lastPlayerChunkPosition && chunkColumn.find(chunkPosition) != chunkColumn.end()) {
+        return; // player hasn't moved to a new chunk column, no need to load new chunks
+    }
+    lastPlayerChunkPosition = chunkPosition;
+
     int pt2 = 0;
     for (auto it = chunkColumn.begin(); it != chunkColumn.end();) {
         auto pos = it->first;
@@ -379,11 +385,15 @@ void World::meshGenerationWorkerThread() {
 
 void World::uploadChunksToGPU() {
 
-    std::lock_guard<std::mutex> lock(chunksToUploadToGPU_mutex);
     int chunksUploadedThisFrame = 0;
-    while (!chunksToUploadToGPU.empty() && chunksUploadedThisFrame < chunksToUploadToGPUPerFrame) {
-        glm::ivec3 chunkPos = chunksToUploadToGPU.front();
-        chunksToUploadToGPU.pop();
+    while (chunksUploadedThisFrame < chunksToUploadToGPUPerFrame) {
+        glm::ivec3 chunkPos;
+        {
+            std::lock_guard<std::mutex> lock(chunksToUploadToGPU_mutex);
+            if (chunksToUploadToGPU.empty()) break;
+            chunkPos = chunksToUploadToGPU.front();
+            chunksToUploadToGPU.pop();
+        }
         auto it = chunkColumn.find({chunkPos.x, chunkPos.z});
         if (it == chunkColumn.end()) {
             continue; // chunk column not loaded, ignore
@@ -396,7 +406,10 @@ void World::uploadChunksToGPU() {
             continue; // chunk not assigned an SSBO index, ignore
         }
         
-        std::lock_guard<std::mutex> lock(chunk.meshMutex);
+        std::unique_lock<std::mutex> lock(chunk.meshMutex, std::try_to_lock);
+        if (!lock.owns_lock()) {
+            continue; // Worker is currently meshing this chunk, ignore and try again later
+        }
 
         if (!chunk.hasMeshToUpload) {
             continue; // no mesh to upload, ignore

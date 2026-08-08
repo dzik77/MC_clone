@@ -51,13 +51,17 @@ World::World() {
 
 }
 
-void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket) {
+void World::getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket) {
+    
+    bool chunkColumnExists;
+    {
+        std::lock_guard<std::mutex> lock(chunkColumnsMutex);
+        chunkColumnExists = chunkColumns.find(chunkColumnPosition) != chunkColumns.end();
 
-    // Generate noise values for the chunk column (SIMD optimized)
-    std::vector<float> continentalnessBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), erosionBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), peaksAndValleysBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), chunkBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE);
-    continentalness->GenUniformGrid2D(continentalnessBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
-    erosionFractal->GenUniformGrid2D(erosionBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
-    peaksAndValleysFractal->GenUniformGrid2D(peaksAndValleysBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
+    }
+    if (!chunkColumnExists) {
+        generateTerrain(chunkColumnPosition);
+    }
 
     for (int y = 0; y < WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
         chunkColumnPacket[y].x = chunkColumnPosition.x;
@@ -65,6 +69,32 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkCo
         chunkColumnPacket[y].y = y;
         std::memset(chunkColumnPacket[y].chunkBlocks, 0, sizeof(chunkColumnPacket[y].chunkBlocks));
     }
+    
+    {
+        std::lock_guard<std::mutex> lock(chunkColumnsMutex);
+        auto& chunkColumn = chunkColumns[chunkColumnPosition];
+        for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
+            for (int y = 0; y < WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
+                int chunkY = y / WorldConfig::CHUNK_SIZE;
+                int localY = y % WorldConfig::CHUNK_SIZE;
+                for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
+                    chunkColumnPacket[chunkY].chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + localY * WorldConfig::CHUNK_SIZE + z] = chunkColumn->blocks[x][y][z];
+                }
+            }
+        }
+    }
+
+}
+
+void World::generateTerrain(glm::ivec2 chunkColumnPosition) {
+
+    // Generate noise values for the chunk column (SIMD optimized)
+    std::vector<float> continentalnessBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), erosionBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), peaksAndValleysBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), chunkBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE);
+    continentalness->GenUniformGrid2D(continentalnessBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
+    erosionFractal->GenUniformGrid2D(erosionBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
+    peaksAndValleysFractal->GenUniformGrid2D(peaksAndValleysBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
+
+    auto chunkColumn = std::make_unique<ChunkColumn>();
 
     // Combine the noise values to determine the final height of each column in the chunk
     for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
@@ -79,7 +109,7 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkCo
             for (int y = 0; y <= fillHeight; y++){
                 int chunkY = y / WorldConfig::CHUNK_SIZE;
                 int localY = y % WorldConfig::CHUNK_SIZE;
-                chunkColumnPacket[chunkY].chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + localY * WorldConfig::CHUNK_SIZE + z] = getBlockFromHeight(y, height);
+                chunkColumn->blocks[x][y][z] = getBlockFromHeight(y, height);
             }
             //chunkColumn.Blocks[x][0][z] = 1;
             //chunkColumn.Blocks[x][63][z] = 2;
@@ -87,6 +117,28 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkCo
         }
         //std::cout << std::endl;
     }
+
+    {
+        std::lock_guard<std::mutex> lock(chunkColumnsMutex);
+        chunkColumns[chunkColumnPosition] = std::move(chunkColumn);
+    }
+
+}
+
+Block World::getBlockAt(const glm::ivec3 &position) const {
+
+    int chunkColumnX = std::floor(static_cast<float>(position.x) / WorldConfig::CHUNK_SIZE);
+    int chunkColumnZ = std::floor(static_cast<float>(position.z) / WorldConfig::CHUNK_SIZE);
+    auto it = chunkColumns.find({chunkColumnX, chunkColumnZ});
+    if (it == chunkColumns.end()) {
+        return Block::AIR; // Chunk column not loaded
+    }
+    if (position.y < 0 || position.y >= WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT) {
+        return Block::AIR; // Y position out of bounds
+    }
+    int chunkPosX = position.x - chunkColumnX * WorldConfig::CHUNK_SIZE;
+    int chunkPosZ = position.z - chunkColumnZ * WorldConfig::CHUNK_SIZE;
+    return it->second->blocks[chunkPosX][position.y][chunkPosZ];
 
 }
 
