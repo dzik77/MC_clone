@@ -35,6 +35,27 @@ void Networking::sendPlayerMovePacket(SavedClientState state) {
 
 }
 
+void Networking::sendPlaceBlockPacket(glm::ivec3 position, Block block) {
+
+    PlaceBlockPacket packet;
+    packet.position = position;
+    packet.block = block;
+
+    ENetPacket* enetPacket = enet_packet_create(&packet, sizeof(PlaceBlockPacket), ENET_PACKET_FLAG_RELIABLE);
+    enet_peer_send(serverPeer, 0, enetPacket);
+
+}
+
+void Networking::sendDestroyBlockPacket(glm::ivec3 position) {
+
+    DestroyBlockPacket packet;
+    packet.position = position;
+
+    ENetPacket* enetPacket = enet_packet_create(&packet, sizeof(DestroyBlockPacket), ENET_PACKET_FLAG_RELIABLE);
+    enet_peer_send(serverPeer, 0, enetPacket);
+
+}
+
 bool Networking::connectToServer(std::string ip)
 {
 
@@ -133,6 +154,13 @@ void Networking::handleEvents(ENetEvent& event) {
             }
 
             break;
+        }
+        case PacketType::BlockUpdate: {
+
+            BlockUpdatePacket* blockUpdatePacket = reinterpret_cast<BlockUpdatePacket*>(event.packet->data);
+            worldAccessor->updateBlock(blockUpdatePacket->position, blockUpdatePacket->block);
+            break;
+
         }
         default:
             std::cerr << "Unknown packet type received: " << static_cast<int>(packetType) << std::endl;

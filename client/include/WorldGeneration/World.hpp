@@ -99,7 +99,7 @@ class World : public IWorldAccessor {
         ankerl::unordered_dense::set<glm::ivec2, IVec2Hash> chunksGeneratedOnEdge;
         
         // Chunks waiting for mesh generation
-        void regenerateMeshForChunk(glm::ivec2 position);
+        void regenerateMeshForChunk(glm::ivec3 position);
         struct MeshJob {
             std::shared_ptr<ChunkColumn> chunkColumn;
             int columnHeight;

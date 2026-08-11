@@ -5,6 +5,12 @@
 #include <Engine/Camera.hpp>
 #include <Engine/Networking.hpp>
 
+struct BlockUpdate{
+    bool isUpdate;
+    glm::ivec3 position;
+    Block block;
+};
+
 class Player : Entity {
 
     public:
@@ -50,6 +56,9 @@ class Player : Entity {
         SavedClientState getCurrentState() const {
             return currentState;
         }
+        BlockUpdate getBlockUpdate() const {
+            return blockUpdate;
+        }
         
         void handleInput(uint8_t input);
         void MouseInput(float xoffset, float yoffset);
@@ -60,6 +69,8 @@ class Player : Entity {
         IWorldAccessor* worldAccessor = nullptr;
 
         SavedClientState currentState;
+
+        BlockUpdate blockUpdate;
 
         glm::vec3 
             Front,

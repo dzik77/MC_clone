@@ -24,16 +24,26 @@ void Player::handleInput(uint8_t input) {
     velocity = glm::vec3(movement.x, velocity.y, movement.z);
 
     // Block updates
-    if (input & 0b1000000) { // RIGHT MOUSE BUTTON
-        RaycastResult raycastResult = raycast(camera.getPosition(), camera.getFront(), 5.0f, *worldAccessor);
-        if (raycastResult.hit) {
-            worldAccessor->updateBlock(raycastResult.placementVoxel, Block::STONE);
-        }
-    }
     if (input & 0b10000000) { // LEFT MOUSE BUTTON
         RaycastResult raycastResult = raycast(camera.getPosition(), camera.getFront(), 5.0f, *worldAccessor);
         if (raycastResult.hit) {
             worldAccessor->updateBlock(raycastResult.hitVoxel, Block::AIR);
+            blockUpdate.isUpdate = true;
+            blockUpdate.position = raycastResult.hitVoxel;
+            blockUpdate.block = Block::AIR;
+        } else {
+            blockUpdate.isUpdate = false;
+        }
+    }
+    if (input & 0b1000000) { // RIGHT MOUSE BUTTON
+        RaycastResult raycastResult = raycast(camera.getPosition(), camera.getFront(), 5.0f, *worldAccessor);
+        if (raycastResult.hit) {
+            worldAccessor->updateBlock(raycastResult.placementVoxel, Block::STONE);
+            blockUpdate.isUpdate = true;
+            blockUpdate.position = raycastResult.placementVoxel;
+            blockUpdate.block = Block::STONE;
+        } else {
+            blockUpdate.isUpdate = false;
         }
     }
 

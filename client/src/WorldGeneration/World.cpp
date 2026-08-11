@@ -180,21 +180,48 @@ void World::updateBlock(glm::ivec3 position, Block block) {
     }
     int chunkPosX = position.x - chunkColumnPos.x * WorldConfig::CHUNK_SIZE;
     int chunkPosZ = position.z - chunkColumnPos.y * WorldConfig::CHUNK_SIZE;
+    if (it->second->blocks[chunkPosX][position.y][chunkPosZ] == block){
+        return; // no change, ignore
+    }
     it->second->blocks[chunkPosX][position.y][chunkPosZ] = block;
-
-    regenerateMeshForChunk(chunkColumnPos);
-    regenerateMeshForChunk({chunkColumnPos.x-1, chunkColumnPos.y});
-    regenerateMeshForChunk({chunkColumnPos.x+1, chunkColumnPos.y});
-    regenerateMeshForChunk({chunkColumnPos.x, chunkColumnPos.y-1});
-    regenerateMeshForChunk({chunkColumnPos.x, chunkColumnPos.y+1});
+    
+    glm::ivec3 chunkPos = {
+        chunkColumnPos.x,
+        position.y / WorldConfig::CHUNK_SIZE,
+        chunkColumnPos.y
+    };
+    regenerateMeshForChunk(chunkPos);
+    if (chunkPos.x % WorldConfig::CHUNK_SIZE == 0){
+        regenerateMeshForChunk({chunkPos.x-1, chunkPos.y, chunkPos.z});
+    } else if (chunkPos.x % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
+        regenerateMeshForChunk({chunkPos.x+1, chunkPos.y, chunkPos.z});
+    }
+    if (chunkPos.z % WorldConfig::CHUNK_SIZE == 0){
+        regenerateMeshForChunk({chunkPos.x, chunkPos.y, chunkPos.z-1});
+    } else if (chunkPos.z % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
+        regenerateMeshForChunk({chunkPos.x, chunkPos.y, chunkPos.z+1});
+    }
+    if (chunkPos.y % WorldConfig::CHUNK_SIZE == 0){
+        regenerateMeshForChunk({chunkPos.x, chunkPos.y+1, chunkPos.z});
+    } else if (chunkPos.y % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
+        regenerateMeshForChunk({chunkPos.x, chunkPos.y-1, chunkPos.z});
+    }
 
 }
 
-void World::regenerateMeshForChunk(glm::ivec2 position) {
+void World::regenerateMeshForChunk(glm::ivec3 position) {
+    
+    std::cout << "Regenerating mesh for chunk at position: (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
 
-    auto it = chunkColumn.find(position);
+    glm::ivec2 chunkColumnPos;
+    chunkColumnPos.x = position.x;
+    chunkColumnPos.y = position.z;
+    auto it = chunkColumn.find(chunkColumnPos);
     if (it == chunkColumn.end()){
         return; // chunk column not loaded, ignore
+    }
+    if (position.y < 0 || position.y >= WorldConfig::CHUNK_COLUMN_HEIGHT) {
+        return; // out of bounds, ignore
     }
 
     // add to mesh queue for priority meshing
@@ -203,27 +230,26 @@ void World::regenerateMeshForChunk(glm::ivec2 position) {
         chunkColumBack(nullptr), 
         chunkColumLeft(nullptr), 
         chunkColumRight(nullptr);
-    auto itFront = chunkColumn.find({position.x, position.y+1});
+    auto itFront = chunkColumn.find({chunkColumnPos.x, chunkColumnPos.y+1});
     if (itFront != chunkColumn.end()){
         chunkColumFront = itFront->second;
     }
-    auto itBack = chunkColumn.find({position.x, position.y-1});
+    auto itBack = chunkColumn.find({chunkColumnPos.x, chunkColumnPos.y-1});
     if (itBack != chunkColumn.end()){
         chunkColumBack = itBack->second;
     }
-    auto itLeft = chunkColumn.find({position.x-1, position.y});
+    auto itLeft = chunkColumn.find({chunkColumnPos.x-1, chunkColumnPos.y});
     if (itLeft != chunkColumn.end()){
         chunkColumLeft = itLeft->second;
     }
-    auto itRight = chunkColumn.find({position.x+1, position.y});
+    auto itRight = chunkColumn.find({chunkColumnPos.x+1, chunkColumnPos.y});
     if (itRight != chunkColumn.end()){
         chunkColumRight = itRight->second;
     }
     
     {
         std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
-        int chunkHeight = position.y / WorldConfig::CHUNK_SIZE;
-        chunksToGenerateMeshQueue.push_front({it->second, chunkHeight, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++}); // priority meshing, timestamp 0
+        chunksToGenerateMeshQueue.push_front({it->second, position.y, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++}); // priority meshing, timestamp 0
     }
     chunksToGenerateMeshQueue_cv.notify_one();
 

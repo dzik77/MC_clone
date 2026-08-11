@@ -28,6 +28,8 @@ class Networking {
         ~Networking();
         void initialize(std::queue<ChunkPacket> &receivedChunks, Player &player, IWorldAccessor &worldAccessor);
         void sendPlayerMovePacket(SavedClientState state);
+        void sendPlaceBlockPacket(glm::ivec3 position, Block block);
+        void sendDestroyBlockPacket(glm::ivec3 position);
         bool connectToServer(std::string ip);
         void pollEvents();
         void handleEvents(ENetEvent& event);

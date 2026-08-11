@@ -182,6 +182,14 @@ void Game::run() {
         
         // networking
         networking.sendPlayerMovePacket(player.getCurrentState());
+        BlockUpdate blockUpdate = player.getBlockUpdate();
+        if (blockUpdate.isUpdate){
+            if (blockUpdate.block == Block::AIR){
+                networking.sendDestroyBlockPacket(blockUpdate.position);
+            } else {
+                networking.sendPlaceBlockPacket(blockUpdate.position, blockUpdate.block);
+            }
+        }
         networking.pollEvents();
 
         // loading chunks from server
