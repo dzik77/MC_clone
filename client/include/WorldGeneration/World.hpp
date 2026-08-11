@@ -78,7 +78,7 @@ class World : public IWorldAccessor {
         TextureArray textureArray;
         
         // render distance
-        int renderDistance = 10;
+        int renderDistance = 32;
         std::vector<glm::ivec2> chunksToLoadOffset; // based on render distance, calculated in setRenderDistance
         
         // allocator

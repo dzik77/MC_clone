@@ -179,6 +179,7 @@ void World::updateBlock(glm::ivec3 position, Block block) {
         return; // out of bounds, ignore
     }
     int chunkPosX = position.x - chunkColumnPos.x * WorldConfig::CHUNK_SIZE;
+    int chunkPosY = position.y % WorldConfig::CHUNK_SIZE;
     int chunkPosZ = position.z - chunkColumnPos.y * WorldConfig::CHUNK_SIZE;
     if (it->second->blocks[chunkPosX][position.y][chunkPosZ] == block){
         return; // no change, ignore
@@ -190,28 +191,32 @@ void World::updateBlock(glm::ivec3 position, Block block) {
         position.y / WorldConfig::CHUNK_SIZE,
         chunkColumnPos.y
     };
+
+    //std::cout << "Block updated at position: (" << position.x << ", " << position.y << ", " << position.z << ") to block type: " << static_cast<int>(block) << std::endl;
+    //std::cout << "Chunk position: (" << chunkPos.x << ", " << chunkPos.y << ", " << chunkPos.z << ")" << std::endl;
+
     regenerateMeshForChunk(chunkPos);
-    if (chunkPos.x % WorldConfig::CHUNK_SIZE == 0){
+    if (chunkPosX % WorldConfig::CHUNK_SIZE == 0){
         regenerateMeshForChunk({chunkPos.x-1, chunkPos.y, chunkPos.z});
-    } else if (chunkPos.x % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
+    } else if (chunkPosX % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
         regenerateMeshForChunk({chunkPos.x+1, chunkPos.y, chunkPos.z});
     }
-    if (chunkPos.z % WorldConfig::CHUNK_SIZE == 0){
+    if (chunkPosZ % WorldConfig::CHUNK_SIZE == 0){
         regenerateMeshForChunk({chunkPos.x, chunkPos.y, chunkPos.z-1});
-    } else if (chunkPos.z % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
+    } else if (chunkPosZ % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
         regenerateMeshForChunk({chunkPos.x, chunkPos.y, chunkPos.z+1});
     }
-    if (chunkPos.y % WorldConfig::CHUNK_SIZE == 0){
-        regenerateMeshForChunk({chunkPos.x, chunkPos.y+1, chunkPos.z});
-    } else if (chunkPos.y % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
+    if (chunkPosY % WorldConfig::CHUNK_SIZE == 0){
         regenerateMeshForChunk({chunkPos.x, chunkPos.y-1, chunkPos.z});
+    } else if (chunkPosY % WorldConfig::CHUNK_SIZE == WorldConfig::CHUNK_SIZE-1){
+        regenerateMeshForChunk({chunkPos.x, chunkPos.y+1, chunkPos.z});
     }
 
 }
 
 void World::regenerateMeshForChunk(glm::ivec3 position) {
     
-    std::cout << "Regenerating mesh for chunk at position: (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
+    //std::cout << "Regenerating mesh for chunk at position: (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
 
     glm::ivec2 chunkColumnPos;
     chunkColumnPos.x = position.x;

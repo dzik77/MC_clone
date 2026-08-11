@@ -69,7 +69,7 @@ class Chunk{
 };
 
 Chunk create_chunk(glm::ivec3 chunkPosition);
-inline uint32_t create_vertex(int x, int y, int z, uint8_t TextureID, int Direction, int UVCoordinate) {
+inline uint32_t create_vertex(int x, int y, int z, uint8_t TextureID, int Direction, int UVCoordinate, int AmbientOcclusion = 0) {
     /*
         x - 5 bits
         y - 5 bits
@@ -77,8 +77,13 @@ inline uint32_t create_vertex(int x, int y, int z, uint8_t TextureID, int Direct
         TextureID - 8 bits
         Direction - 3 bits
         UVCoordinate - 2bits
+        AmbientOcclusion - 2 bits
     */
-    return ((x & 0x1F) | ((y & 0x1F) << 5) | ((z & 0x1F) << 10) | ((TextureID & 0xFF) << 15) | ((Direction & 0x7) << 23) | ((UVCoordinate & 0x3) << 26));
+    return ((x & 0x1F) | ((y & 0x1F) << 5) | ((z & 0x1F) << 10) | ((TextureID & 0xFF) << 15) | ((Direction & 0x7) << 23) | ((UVCoordinate & 0x3) << 26)) | ((AmbientOcclusion & 0x3) << 28);
+}
+inline int calculateVertexAO(bool side1, bool side2, bool corner) {
+    if (side1 && side2) return 3;
+    return side1 + side2 + corner;
 }
 
 

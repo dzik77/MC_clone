@@ -140,6 +140,7 @@ void Game::run() {
 
         currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
+        if (deltaTime > 0.1f) deltaTime = 0.1f;
         lastFrame = currentFrame;
 
         frameCount++;
@@ -189,6 +190,7 @@ void Game::run() {
             } else {
                 networking.sendPlaceBlockPacket(blockUpdate.position, blockUpdate.block);
             }
+            player.clearBlockUpdate();
         }
         networking.pollEvents();
 
@@ -227,7 +229,7 @@ void Game::framebuffer_size_callback(GLFWwindow *window, int width, int height) 
     glViewport(0,0,width,height);
     Game* game = static_cast<Game*>(glfwGetWindowUserPointer(window));
     if (game && height > 0) {
-        game->projection = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 1000.f);
+        game->projection = glm::perspective(glm::radians(90.0f), (float)width / (float)height, 0.1f, 1000.f);
     }
 }
 

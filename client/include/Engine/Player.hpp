@@ -59,6 +59,9 @@ class Player : Entity {
         BlockUpdate getBlockUpdate() const {
             return blockUpdate;
         }
+        void clearBlockUpdate() {
+            blockUpdate.isUpdate = false;
+        }
         
         void handleInput(uint8_t input);
         void MouseInput(float xoffset, float yoffset);

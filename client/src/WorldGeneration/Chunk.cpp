@@ -105,6 +105,29 @@ void Chunk::generateMesh(
         return blocks[x][y + yOffset][z + 1];
     };
 
+    auto getBlockSafe = [&](int rx, int ry, int rz) -> Block {
+        int absY = ry + yOffset;
+        if (absY < 0 || absY >= WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT) return Block::AIR;
+        
+        if (rx < 0 && rz >= 0 && rz < WorldConfig::CHUNK_SIZE) return blocks_Left ? blocks_Left[WorldConfig::CHUNK_SIZE - 1][absY][rz] : Block::AIR;
+        if (rx >= WorldConfig::CHUNK_SIZE && rz >= 0 && rz < WorldConfig::CHUNK_SIZE) return blocks_Right ? blocks_Right[0][absY][rz] : Block::AIR;
+        if (rz < 0 && rx >= 0 && rx < WorldConfig::CHUNK_SIZE) return blocks_Back ? blocks_Back[rx][absY][WorldConfig::CHUNK_SIZE - 1] : Block::AIR;
+        if (rz >= WorldConfig::CHUNK_SIZE && rx >= 0 && rx < WorldConfig::CHUNK_SIZE) return blocks_Front ? blocks_Front[rx][absY][0] : Block::AIR;
+        
+        if (rx >= 0 && rx < WorldConfig::CHUNK_SIZE && rz >= 0 && rz < WorldConfig::CHUNK_SIZE) return blocks[rx][absY][rz];
+        
+        return Block::AIR; 
+    };
+
+    auto vertexAO = [&](int side1X, int side1Y, int side1Z,
+                        int side2X, int side2Y, int side2Z,
+                        int cornerX, int cornerY, int cornerZ) -> int {
+        bool s1 = isSolid(getBlockSafe(side1X, side1Y, side1Z));
+        bool s2 = isSolid(getBlockSafe(side2X, side2Y, side2Z));
+        bool c = isSolid(getBlockSafe(cornerX, cornerY, cornerZ));
+        return calculateVertexAO(s1, s2, c);
+    };
+
     auto shouldAddFace = [](Block currentBlock, Block neighborBlock) -> bool {
         if (isSolid(currentBlock)) {
             return neighborBlock == Block::AIR || isTransparent(neighborBlock);
@@ -138,78 +161,132 @@ void Chunk::generateMesh(
                 Block leftNeighbor = getNeighborLeft(x, y, z);
                 if (shouldAddFace(currentBlock, leftNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 0));   // TL
-                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 1)); // TR
-                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 2));   // BR
-                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 3));     // BL
+                    int ao0 = vertexAO(x-1, y+1, z, x-1, y, z-1, x-1, y+1, z-1);
+                    int ao1 = vertexAO(x-1, y+1, z, x-1, y, z+1, x-1, y+1, z+1);
+                    int ao2 = vertexAO(x-1, y-1, z, x-1, y, z+1, x-1, y-1, z+1);
+                    int ao3 = vertexAO(x-1, y-1, z, x-1, y, z-1, x-1, y-1, z-1);
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 0, ao0));   // TL
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 1, ao1)); // TR
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 2, ao2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 3, ao3));     // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // RIGHT
                 Block rightNeighbor = getNeighborRight(x, y, z);
                 if (shouldAddFace(currentBlock, rightNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 0)); // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 1));   // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 2));     // BR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 3));   // BL
+                    int ao0 = vertexAO(x+1, y+1, z, x+1, y, z+1, x+1, y+1, z+1);
+                    int ao1 = vertexAO(x+1, y+1, z, x+1, y, z-1, x+1, y+1, z-1);
+                    int ao2 = vertexAO(x+1, y-1, z, x+1, y, z-1, x+1, y-1, z-1);
+                    int ao3 = vertexAO(x+1, y-1, z, x+1, y, z+1, x+1, y-1, z+1);
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 0, ao0)); // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 1, ao1));   // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 2, ao2));     // BR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 3, ao3));   // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // DOWN
                 Block downNeighbor = getNeighborDown(x, y, z);
                 if (shouldAddFace(currentBlock, downNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 0));   // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 1)); // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 2));   // BR
-                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 3));     // BL
+                    int ao0 = vertexAO(x-1, y-1, z, x, y-1, z+1, x-1, y-1, z+1);
+                    int ao1 = vertexAO(x+1, y-1, z, x, y-1, z+1, x+1, y-1, z+1);
+                    int ao2 = vertexAO(x+1, y-1, z, x, y-1, z-1, x+1, y-1, z-1);
+                    int ao3 = vertexAO(x-1, y-1, z, x, y-1, z-1, x-1, y-1, z-1);
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 0, ao0));   // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 1, ao1)); // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 2, ao2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 3, ao3));     // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // UP
                 Block upNeighbor = getNeighborUp(x, y, z);
                 if (shouldAddFace(currentBlock, upNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 0));     // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 1));   // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 2)); // BR
-                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 3));   // BL
+                    int ao0 = vertexAO(x-1, y+1, z, x, y+1, z-1, x-1, y+1, z-1);
+                    int ao1 = vertexAO(x+1, y+1, z, x, y+1, z-1, x+1, y+1, z-1);
+                    int ao2 = vertexAO(x+1, y+1, z, x, y+1, z+1, x+1, y+1, z+1);
+                    int ao3 = vertexAO(x-1, y+1, z, x, y+1, z+1, x-1, y+1, z+1);
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 0, ao0));     // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 1, ao1));   // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 2, ao2)); // BR
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 3, ao3));   // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // BACKWARD
                 Block backNeighbor = getNeighborBack(x, y, z);
                 if (shouldAddFace(currentBlock, backNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 0)); // TL
-                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 1));   // TR
-                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 2));     // BR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 3));   // BL
+                    int ao0 = vertexAO(x+1, y, z-1, x, y+1, z-1, x+1, y+1, z-1);
+                    int ao1 = vertexAO(x-1, y, z-1, x, y+1, z-1, x-1, y+1, z-1);
+                    int ao2 = vertexAO(x-1, y, z-1, x, y-1, z-1, x-1, y-1, z-1);
+                    int ao3 = vertexAO(x+1, y, z-1, x, y-1, z-1, x+1, y-1, z-1);
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 0, ao0)); // TL
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 1, ao1));   // TR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 2, ao2));     // BR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 3, ao3));   // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // FORWARD
                 Block frontNeighbor = getNeighborFront(x, y, z);
                 if (shouldAddFace(currentBlock, frontNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 0)); // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 1)); // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 2));   // BR
-                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 3));     // BL
+                    int ao0 = vertexAO(x-1, y, z+1, x, y+1, z+1, x-1, y+1, z+1);
+                    int ao1 = vertexAO(x+1, y, z+1, x, y+1, z+1, x+1, y+1, z+1);
+                    int ao2 = vertexAO(x+1, y, z+1, x, y-1, z+1, x+1, y-1, z+1);
+                    int ao3 = vertexAO(x-1, y, z+1, x, y-1, z+1, x-1, y-1, z+1);
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 0, ao0)); // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 1, ao1)); // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 2, ao2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 3, ao3));     // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
             }
         }
@@ -331,6 +408,29 @@ void generateMeshForChunkThreadSafe(
         return chunkColumn->blocks[x][y + yOffset][z + 1];
     };
 
+    auto getBlockSafe = [&](int rx, int ry, int rz) -> Block {
+        int absY = ry + yOffset;
+        if (absY < 0 || absY >= WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT) return Block::AIR;
+        
+        if (rx < 0 && rz >= 0 && rz < WorldConfig::CHUNK_SIZE) return chunkColumn_Left ? chunkColumn_Left->blocks[WorldConfig::CHUNK_SIZE - 1][absY][rz] : Block::AIR;
+        if (rx >= WorldConfig::CHUNK_SIZE && rz >= 0 && rz < WorldConfig::CHUNK_SIZE) return chunkColumn_Right ? chunkColumn_Right->blocks[0][absY][rz] : Block::AIR;
+        if (rz < 0 && rx >= 0 && rx < WorldConfig::CHUNK_SIZE) return chunkColumn_Back ? chunkColumn_Back->blocks[rx][absY][WorldConfig::CHUNK_SIZE - 1] : Block::AIR;
+        if (rz >= WorldConfig::CHUNK_SIZE && rx >= 0 && rx < WorldConfig::CHUNK_SIZE) return chunkColumn_Front ? chunkColumn_Front->blocks[rx][absY][0] : Block::AIR;
+        
+        if (rx >= 0 && rx < WorldConfig::CHUNK_SIZE && rz >= 0 && rz < WorldConfig::CHUNK_SIZE) return chunkColumn->blocks[rx][absY][rz];
+        
+        return Block::AIR; 
+    };
+
+    auto vertexAO = [&](int side1X, int side1Y, int side1Z,
+                        int side2X, int side2Y, int side2Z,
+                        int cornerX, int cornerY, int cornerZ) -> int {
+        bool s1 = isSolid(getBlockSafe(side1X, side1Y, side1Z));
+        bool s2 = isSolid(getBlockSafe(side2X, side2Y, side2Z));
+        bool c = isSolid(getBlockSafe(cornerX, cornerY, cornerZ));
+        return calculateVertexAO(s1, s2, c);
+    };
+
     auto shouldAddFace = [](Block currentBlock, Block neighborBlock) -> bool {
         if (isSolid(currentBlock)) {
             return neighborBlock == Block::AIR || isTransparent(neighborBlock);
@@ -364,78 +464,132 @@ void generateMeshForChunkThreadSafe(
                 Block leftNeighbor = getNeighborLeft(x, y, z);
                 if (shouldAddFace(currentBlock, leftNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 0));   // TL
-                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 1)); // TR
-                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 2));   // BR
-                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 3));     // BL
+                    int ao0 = vertexAO(x-1, y+1, z, x-1, y, z-1, x-1, y+1, z-1);
+                    int ao1 = vertexAO(x-1, y+1, z, x-1, y, z+1, x-1, y+1, z+1);
+                    int ao2 = vertexAO(x-1, y-1, z, x-1, y, z+1, x-1, y-1, z+1);
+                    int ao3 = vertexAO(x-1, y-1, z, x-1, y, z-1, x-1, y-1, z-1);
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 0, ao0));   // TL
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 1, ao1)); // TR
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 2, ao2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::LEFT), (int)Direction::LEFT, 3, ao3));     // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // RIGHT
                 Block rightNeighbor = getNeighborRight(x, y, z);
                 if (shouldAddFace(currentBlock, rightNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 0)); // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 1));   // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 2));     // BR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 3));   // BL
+                    int ao0 = vertexAO(x+1, y+1, z, x+1, y, z+1, x+1, y+1, z+1);
+                    int ao1 = vertexAO(x+1, y+1, z, x+1, y, z-1, x+1, y+1, z-1);
+                    int ao2 = vertexAO(x+1, y-1, z, x+1, y, z-1, x+1, y-1, z-1);
+                    int ao3 = vertexAO(x+1, y-1, z, x+1, y, z+1, x+1, y-1, z+1);
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 0, ao0)); // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 1, ao1));   // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 2, ao2));     // BR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::RIGHT), (int)Direction::RIGHT, 3, ao3));   // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // DOWN
                 Block downNeighbor = getNeighborDown(x, y, z);
                 if (shouldAddFace(currentBlock, downNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 0));   // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 1)); // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 2));   // BR
-                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 3));     // BL
+                    int ao0 = vertexAO(x-1, y-1, z, x, y-1, z+1, x-1, y-1, z+1);
+                    int ao1 = vertexAO(x+1, y-1, z, x, y-1, z+1, x+1, y-1, z+1);
+                    int ao2 = vertexAO(x+1, y-1, z, x, y-1, z-1, x+1, y-1, z-1);
+                    int ao3 = vertexAO(x-1, y-1, z, x, y-1, z-1, x-1, y-1, z-1);
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 0, ao0));   // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 1, ao1)); // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 2, ao2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::DOWN), (int)Direction::DOWN, 3, ao3));     // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // UP
                 Block upNeighbor = getNeighborUp(x, y, z);
                 if (shouldAddFace(currentBlock, upNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 0));     // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 1));   // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 2)); // BR
-                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 3));   // BL
+                    int ao0 = vertexAO(x-1, y+1, z, x, y+1, z-1, x-1, y+1, z-1);
+                    int ao1 = vertexAO(x+1, y+1, z, x, y+1, z-1, x+1, y+1, z-1);
+                    int ao2 = vertexAO(x+1, y+1, z, x, y+1, z+1, x+1, y+1, z+1);
+                    int ao3 = vertexAO(x-1, y+1, z, x, y+1, z+1, x-1, y+1, z+1);
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 0, ao0));     // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 1, ao1));   // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 2, ao2)); // BR
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::UP), (int)Direction::UP, 3, ao3));   // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // BACKWARD
                 Block backNeighbor = getNeighborBack(x, y, z);
                 if (shouldAddFace(currentBlock, backNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 0)); // TL
-                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 1));   // TR
-                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 2));     // BR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 3));   // BL
+                    int ao0 = vertexAO(x+1, y, z-1, x, y+1, z-1, x+1, y+1, z-1);
+                    int ao1 = vertexAO(x-1, y, z-1, x, y+1, z-1, x-1, y+1, z-1);
+                    int ao2 = vertexAO(x-1, y, z-1, x, y-1, z-1, x-1, y-1, z-1);
+                    int ao3 = vertexAO(x+1, y, z-1, x, y-1, z-1, x+1, y-1, z-1);
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 0, ao0)); // TL
+                    targetVertices->emplace_back(create_vertex(x,y+1,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 1, ao1));   // TR
+                    targetVertices->emplace_back(create_vertex(x,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 2, ao2));     // BR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z,getTextureID(currentBlock, Direction::BACKWARD), (int)Direction::BACKWARD, 3, ao3));   // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
 
                 // FORWARD
                 Block frontNeighbor = getNeighborFront(x, y, z);
                 if (shouldAddFace(currentBlock, frontNeighbor)){
                     uint32_t idx = targetVertices->size();
-                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 0)); // TL
-                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 1)); // TR
-                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 2));   // BR
-                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 3));     // BL
+                    int ao0 = vertexAO(x-1, y, z+1, x, y+1, z+1, x-1, y+1, z+1);
+                    int ao1 = vertexAO(x+1, y, z+1, x, y+1, z+1, x+1, y+1, z+1);
+                    int ao2 = vertexAO(x+1, y, z+1, x, y-1, z+1, x+1, y-1, z+1);
+                    int ao3 = vertexAO(x-1, y, z+1, x, y-1, z+1, x-1, y-1, z+1);
+                    targetVertices->emplace_back(create_vertex(x,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 0, ao0)); // TL
+                    targetVertices->emplace_back(create_vertex(x+1,y+1,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 1, ao1)); // TR
+                    targetVertices->emplace_back(create_vertex(x+1,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 2, ao2));   // BR
+                    targetVertices->emplace_back(create_vertex(x,y,z+1,getTextureID(currentBlock, Direction::FORWARD), (int)Direction::FORWARD, 3, ao3));     // BL
                     
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
-                    targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    if (ao0 + ao2 < ao1 + ao3) {
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx); targetIndices->push_back(idx + 3);
+                        targetIndices->push_back(idx + 1); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                    } else {
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 3); targetIndices->push_back(idx + 2);
+                        targetIndices->push_back(idx); targetIndices->push_back(idx + 2); targetIndices->push_back(idx + 1);
+                    }
                 }
             }
         }

@@ -159,6 +159,7 @@ void Server::handlePacket(ENetEvent& event) {
                     serverAuthoritativeStatePacket.truePosition = player.position;
 
                     // send server authoritative state packet
+                    player.lastProcessedInputSequenceID = playerMovePacket->sequenceID;
                     if (abs(player.position.x - playerMovePacket->position.x) > 0.001f || 
                         abs(player.position.y - playerMovePacket->position.y) > 0.001f || 
                         abs(player.position.z - playerMovePacket->position.z) > 0.001f) {
@@ -168,8 +169,6 @@ void Server::handlePacket(ENetEvent& event) {
                         ENetPacket* packet = enet_packet_create(&serverAuthoritativeStatePacket, sizeof(ServerAuthoritativeStatePacket), ENET_PACKET_FLAG_RELIABLE);
                         enet_peer_send(event.peer, 0, packet);
                     } else {
-                        player.lastProcessedInputSequenceID = playerMovePacket->sequenceID;
-
                         serverAuthoritativeStatePacket.wasRejected = false;
 
                         // not IMPORTANT: send on channel 1 without ENET_PACKET_FLAG_RELIABLE since it's not critical to be delivered
@@ -192,7 +191,13 @@ void Server::handlePacket(ENetEvent& event) {
             blockUpdatePacket.block = placeBlockPacket->block;
 
             ENetPacket* packet = enet_packet_create(&blockUpdatePacket, sizeof(BlockUpdatePacket), ENET_PACKET_FLAG_RELIABLE);
-            enet_host_broadcast(server, 0, packet); 
+            for (int i = 0; i < server->peerCount; i++) {
+                ENetPeer* peer = &server->peers[i];
+                if (peer->state != ENET_PEER_STATE_CONNECTED || peer == event.peer) {
+                    continue;
+                }
+                enet_peer_send(peer, 0, packet);
+            }
 
             break;
 
@@ -207,7 +212,13 @@ void Server::handlePacket(ENetEvent& event) {
             blockUpdatePacket.block = Block::AIR;
 
             ENetPacket* packet = enet_packet_create(&blockUpdatePacket, sizeof(BlockUpdatePacket), ENET_PACKET_FLAG_RELIABLE);
-            enet_host_broadcast(server, 0, packet);
+            for (int i = 0; i < server->peerCount; i++) {
+                ENetPeer* peer = &server->peers[i];
+                if (peer->state != ENET_PEER_STATE_CONNECTED || peer == event.peer) {
+                    continue;
+                }
+                enet_peer_send(peer, 0, packet);
+            }
 
             break;
 

@@ -31,6 +31,8 @@ void Networking::sendPlayerMovePacket(SavedClientState state) {
     ENetPacket* enetPacket = enet_packet_create(&packet, sizeof(PlayerMovePacket), 0);
     enet_peer_send(serverPeer, 1, enetPacket);
 
+    // Mask out mouse buttons (left: 0b10000000, right: 0b1000000) so we don't replay block breaking/placing
+    state.input &= ~(0b11000000);
     clientStateHistory.push_back(state);
 
 }

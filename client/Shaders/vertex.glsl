@@ -3,6 +3,7 @@
 layout (location = 0) in uint packedData;
 out vec2 TexCoords;
 out float TexLayer;
+out float AmbientOcclusion;
 
 struct ChunkPosition {
     vec4 position;
@@ -30,6 +31,7 @@ void main() {
     uint textureID = (packedData >> 15u) & 255u;
     uint direction = (packedData >> 23u) & 7u;
     uint uvCoordinate = (packedData >> 26u) & 3u;
+    uint ambientOcclusion = (packedData >> 28u) & 3u;
 
     vec3 finalPos = vec3(float(x), float(y), float(z)) + positions[gl_BaseInstance].position.xyz;
 
@@ -38,4 +40,7 @@ void main() {
     TexCoords = UV_MAP[uvCoordinate];
 
     TexLayer = float(int(textureID)-1);
+
+    AmbientOcclusion = float(ambientOcclusion);
+
 }

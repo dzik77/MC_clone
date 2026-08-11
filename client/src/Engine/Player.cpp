@@ -37,7 +37,10 @@ void Player::handleInput(uint8_t input) {
     }
     if (input & 0b1000000) { // RIGHT MOUSE BUTTON
         RaycastResult raycastResult = raycast(camera.getPosition(), camera.getFront(), 5.0f, *worldAccessor);
-        if (raycastResult.hit) {
+        AABB aabb;
+        aabb.min = raycastResult.placementVoxel;
+        aabb.max = raycastResult.placementVoxel + glm::vec3(1.0f);
+        if (raycastResult.hit && !aabb.intersects(boundingBox)) {
             worldAccessor->updateBlock(raycastResult.placementVoxel, Block::STONE);
             blockUpdate.isUpdate = true;
             blockUpdate.position = raycastResult.placementVoxel;
