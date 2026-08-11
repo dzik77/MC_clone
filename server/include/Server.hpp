@@ -1,6 +1,10 @@
 #pragma once
 
 #include <enet/enet.h>
+
+inline bool operator==(const ENetAddress& lhs, const ENetAddress& rhs) {
+    return lhs.host == rhs.host && lhs.port == rhs.port;
+}
 #include <iostream>
 #include <thread>
 #include <mutex>
@@ -14,6 +18,7 @@
 #include <ankerl/unordered_dense.h>
 #include <Player.hpp>
 #include <PhysicsEngine.hpp>
+#include <chrono>
 
 struct ChunkToGenerate {
     int x;
@@ -33,6 +38,11 @@ class Server{
         void run();
 
     private:
+
+        // Server constants
+        const int TARGET_TPS = 60; // Target ticks per second
+        const std::chrono::milliseconds TICK_DURATION = std::chrono::milliseconds(1000 / TARGET_TPS);
+        const int renderDistance = 32;
 
         std::atomic<bool> running;
 

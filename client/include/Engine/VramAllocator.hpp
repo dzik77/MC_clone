@@ -6,6 +6,7 @@
 #include <set>
 #include <stdexcept>
 #include <cstring>
+#include <mutex>
 
 struct VramBlock {
     std::size_t offset;
@@ -61,5 +62,6 @@ class VramAllocator{
         //GLbitfield accessFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
         std::set<VramBlock, CompareBlockBySize> freeVertexBlocks, freeIndexBlocks;
         std::set<VramBlock, CompareBlockByOffset> freeVertexBlocksOffset, freeIndexBlocksOffset;
+        std::mutex allocatorMutex;
     
 };

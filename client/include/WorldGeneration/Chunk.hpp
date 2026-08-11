@@ -102,5 +102,15 @@ class ChunkColumn{
 
     int loadedChunks = 0;
 
+#ifdef DEBUG
+    enum class ChunkDebugState {
+        Unrequested,
+        Requested,
+        InMeshingQueue,
+        Ready
+    };
+    std::atomic<ChunkDebugState> debugState{ChunkDebugState::Unrequested};
+#endif
+
     private:
 };

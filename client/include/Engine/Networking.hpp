@@ -6,7 +6,9 @@
 #include <queue>
 #include <glm/glm.hpp>
 #include <deque>
-#include <Engine/Player.hpp>
+#include <IWorldAccesor.hpp>
+
+class Player;
 #include <IWorldAccesor.hpp>
 
 struct SavedClientState {
@@ -43,8 +45,8 @@ class Networking {
         std::queue<ChunkPacket>* receivedChunks;
 
         // client state
-        Player &player;
-        IWorldAccessor& worldAccessor;
+        Player* player;
+        IWorldAccessor* worldAccessor;
         int currentSequenceID = 1;
         std::deque<SavedClientState> clientStateHistory;
 

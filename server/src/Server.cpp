@@ -32,17 +32,24 @@ void Server::run() {
 
     while(running) {
 
+        auto tickStartTime = std::chrono::high_resolution_clock::now();
+
         ENetEvent event;
-        while (enet_host_service(server, &event, 50) > 0){
+        while (enet_host_service(server, &event, 0) > 0) {
             switch (event.type) {
-                case ENET_EVENT_TYPE_CONNECT:
+                case ENET_EVENT_TYPE_CONNECT: {
+
                     std::cout << "A new client connected from "
-                              << event.peer->address.host << ":" << event.peer->address.port
-                              << std::endl;
+                                << event.peer->address.host << ":" << event.peer->address.port
+                                << std::endl;
                     glm::vec3 initialPosition(0.0f, 80.0f, 0.0f);
                     connectedClients[event.peer->address] = {event.peer, initialPosition, 0};
                     event.peer->data = (void*)"Player 1";
+
+                    //sent PlayerInitialPositionPacket to the client
+
                     break;
+                }
                 case ENET_EVENT_TYPE_RECEIVE:
                     handlePacket(event);
                     break;
@@ -62,6 +69,7 @@ void Server::run() {
                 ChunkToSend& chunkToSend = chunksToSend.front();
                 ENetPacket* packet = enet_packet_create(&chunkToSend.chunkPacket, sizeof(ChunkPacket), ENET_PACKET_FLAG_RELIABLE);
                 enet_peer_send(chunkToSend.peer, 0, packet);
+                //std::osyncstream(std::cout) << "Sent chunk at position: (" << chunkToSend.chunkPacket.x << ", " << chunkToSend.chunkPacket.y << ", " << chunkToSend.chunkPacket.z << ") to client." << std::endl;
                 chunksToSend.pop();
             }
         }
@@ -87,6 +95,14 @@ void Server::run() {
             }
         }
 
+        auto tickEndTime = std::chrono::high_resolution_clock::now();
+        auto tickDuration = std::chrono::duration_cast<std::chrono::milliseconds>(tickEndTime - tickStartTime);
+        if (tickDuration < TICK_DURATION) {
+            std::this_thread::sleep_for(TICK_DURATION - tickDuration);
+        } else {
+            std::cout << "Warning: Server tick took longer than expected: " << tickDuration.count() << "ms" << std::endl;
+        }
+
     }
 
     consoleThread.detach();
@@ -105,6 +121,17 @@ void Server::handlePacket(ENetEvent& event) {
         case PacketType::RequestChunk: {
 
             RequestChunkPacket* requestChunkPacket = reinterpret_cast<RequestChunkPacket*>(event.packet->data);
+
+            glm::vec3 playerPosition = connectedClients[event.peer->address].position;
+            glm::ivec2 chunkColumnPos = {requestChunkPacket->chunkColumnX, requestChunkPacket->chunkColumnZ};
+            glm::ivec2 playerChunkColumnPos = {static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)),
+                static_cast<int>(std::floor(playerPosition.z / WorldConfig::CHUNK_SIZE))};
+            if ((chunkColumnPos.x - playerChunkColumnPos.x) * (chunkColumnPos.x - playerChunkColumnPos.x) + 
+                (chunkColumnPos.y - playerChunkColumnPos.y) * (chunkColumnPos.y - playerChunkColumnPos.y) > renderDistance * renderDistance) {
+                //std::cout << "Client requested chunk column at position: (" << requestChunkPacket->chunkColumnX << ", " << requestChunkPacket->chunkColumnZ << ") which is outside of the render distance. Ignoring request." << std::endl;
+                break;
+            }
+
             std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
             chunksToGenerate.push({requestChunkPacket->chunkColumnX, requestChunkPacket->chunkColumnZ, event.peer});
             chunksToGenerateCV.notify_one();
@@ -122,27 +149,66 @@ void Server::handlePacket(ENetEvent& event) {
                     Entity entity;
                     entity.position = player.position;
                     entity.velocity = playerMovePacket->position - player.position;
-                    // assign AABB
-                    glm::vec3 deltaMovmemnt = updateEntity(entity, 0.05f, world);
+                    setBoundingBoxForPlayer(entity);
+
+                    glm::vec3 deltaMovmemnt = updateEntity(entity, 1.0f, world);
                     player.position += deltaMovmemnt;
                     
-                    if (abs(player.position.x - playerMovePacket->position.x) > 0.1f || 
-                        abs(player.position.y - playerMovePacket->position.y) > 0.1f || 
-                        abs(player.position.z - playerMovePacket->position.z) > 0.1f) {
-                        // send server authoritative state packet
-                        ServerAuthoritativeStatePacket serverAuthoritativeStatePacket;
-                        serverAuthoritativeStatePacket.lastProcessedInputSequenceID = playerMovePacket->sequenceID;
-                        serverAuthoritativeStatePacket.truePosition = player.position;
-                        serverAuthoritativeStatePacket.wasRejected = true;
+                    ServerAuthoritativeStatePacket serverAuthoritativeStatePacket;
+                    serverAuthoritativeStatePacket.lastProcessedInputSequenceID = playerMovePacket->sequenceID;
+                    serverAuthoritativeStatePacket.truePosition = player.position;
 
+                    // send server authoritative state packet
+                    if (abs(player.position.x - playerMovePacket->position.x) > 0.001f || 
+                        abs(player.position.y - playerMovePacket->position.y) > 0.001f || 
+                        abs(player.position.z - playerMovePacket->position.z) > 0.001f) {
+                        serverAuthoritativeStatePacket.wasRejected = true;
+                        
+                        // IMPORTANT: Use ENET_PACKET_FLAG_RELIABLE to ensure the packet is delivered reliably
                         ENetPacket* packet = enet_packet_create(&serverAuthoritativeStatePacket, sizeof(ServerAuthoritativeStatePacket), ENET_PACKET_FLAG_RELIABLE);
                         enet_peer_send(event.peer, 0, packet);
                     } else {
                         player.lastProcessedInputSequenceID = playerMovePacket->sequenceID;
+
+                        serverAuthoritativeStatePacket.wasRejected = false;
+
+                        // not IMPORTANT: send on channel 1 without ENET_PACKET_FLAG_RELIABLE since it's not critical to be delivered
+                        ENetPacket* packet = enet_packet_create(&serverAuthoritativeStatePacket, sizeof(ServerAuthoritativeStatePacket), 0);
+                        enet_peer_send(event.peer, 1, packet);
                     }
 
                 }
             }
+            break;
+
+        }
+        case PacketType::PlaceBlock: {
+            
+            PlaceBlockPacket* placeBlockPacket = reinterpret_cast<PlaceBlockPacket*>(event.packet->data);
+            world.updateBlock(placeBlockPacket->position, placeBlockPacket->block);
+
+            BlockUpdatePacket blockUpdatePacket;
+            blockUpdatePacket.position = placeBlockPacket->position;
+            blockUpdatePacket.block = placeBlockPacket->block;
+
+            ENetPacket* packet = enet_packet_create(&blockUpdatePacket, sizeof(BlockUpdatePacket), ENET_PACKET_FLAG_RELIABLE);
+            enet_host_broadcast(server, 0, packet); 
+
+            break;
+
+        }
+        case PacketType::DestroyBlock: {
+
+            DestroyBlockPacket* destroyBlockPacket = reinterpret_cast<DestroyBlockPacket*>(event.packet->data);
+            world.updateBlock(destroyBlockPacket->position, Block::AIR);
+
+            BlockUpdatePacket blockUpdatePacket;
+            blockUpdatePacket.position = destroyBlockPacket->position;
+            blockUpdatePacket.block = Block::AIR;
+
+            ENetPacket* packet = enet_packet_create(&blockUpdatePacket, sizeof(BlockUpdatePacket), ENET_PACKET_FLAG_RELIABLE);
+            enet_host_broadcast(server, 0, packet);
+
             break;
 
         }

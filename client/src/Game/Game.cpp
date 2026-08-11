@@ -9,8 +9,8 @@ Game::Game() {
     glfwSetErrorCallback(error_callback);
 
 #ifdef __linux__
-    // Try to use Wayland if available, but don't force it if it fails
-    glfwInitHint(GLFW_PLATFORM, GLFW_ANY_PLATFORM); 
+    // Try to use X11 to avoid Wayland libdecor heap corruption
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11); 
 #endif
 
     if (!glfwInit()) {
@@ -55,6 +55,18 @@ Game::Game() {
         }
     }, nullptr); 
     #endif
+
+#ifdef DEBUG
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 460");
+#endif
     
 
     std::cout << "OpenGL " << GLVersion.major << "." << GLVersion.minor << " initialized." << std::endl;
@@ -75,7 +87,7 @@ Game::Game() {
     stbi_set_flip_vertically_on_load(true);
 
     // networking
-    networking.initialize(world.receivedChunks);
+    networking.initialize(world.receivedChunks, player, world);
 
     // shaders
     std::cout << "Loading shaders..." << std::endl;
@@ -84,10 +96,21 @@ Game::Game() {
 
     world.initialize();
     
+    // player
+    player.initialize(&world);
+    
 }
 
 Game::~Game(){
+
     world.clean();
+
+#ifdef DEBUG
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+#endif
+
     glfwDestroyWindow(window);
     glfwTerminate();
     enet_deinitialize();
@@ -102,7 +125,7 @@ void Game::run() {
 
     shader.use();
     shader.setInt("textureArray", 0);
-    projection = glm::perspective(glm::radians(45.0f), 800.f / 600.f, 0.1f, 1000.f);
+    projection = glm::perspective(glm::radians(90.0f), 800.f / 600.f, 0.1f, 1000.f);
     shader.setMat4("model", glm::mat4(1.f));
 
     float lastFrame, currentFrame, deltaTime;
@@ -111,6 +134,7 @@ void Game::run() {
     float lastFPSmeasure = lastFrame;
 
     world.startMeshGenerationThreads();
+
 
     while(!glfwWindowShouldClose(window)){
 
@@ -126,9 +150,18 @@ void Game::run() {
             lastFPSmeasure = currentFrame;
         }
 
+
         //input
         processInput(deltaTime);
-        
+
+        // IMGUI
+
+#ifdef DEBUG
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+#endif
+
         // render pipeline 
 
         glClearColor(0.2f,0.3f,0.3f,1.0f);
@@ -136,7 +169,7 @@ void Game::run() {
 
         shader.setMat4("projection", projection);
         shader.setMat4("view", (!freeCameraMode ? player.camera.getView() : freeCamera.getView()));
-
+        
         world.loadChunks(player.getPosition());
         world.generateMesh();
         world.uploadChunksToGPU();
@@ -144,9 +177,9 @@ void Game::run() {
         
         // physics
         if (physics && !freeCameraMode){
-            player.updatePhysics(deltaTime, world);
+            player.updatePhysics(deltaTime);
         }
-
+        
         // networking
         networking.sendPlayerMovePacket(player.getCurrentState());
         networking.pollEvents();
@@ -154,6 +187,21 @@ void Game::run() {
         // loading chunks from server
 
         world.loadTerrain();
+
+        // IMGUI rendering
+#ifdef DEBUG
+        world.renderDebugWindow(player.getPosition());
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            GLFWwindow* backup_current_context = glfwGetCurrentContext();
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+            glfwMakeContextCurrent(backup_current_context);
+        }
+#endif
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -196,10 +244,18 @@ void Game::processInput(float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
         input |= 0b100000; // LEFT SHIFT
     }
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS){
+        input |= 0b1000000; // RIGHT MOUSE BUTTON
+    }
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS){
+        input |= 0b10000000; // LEFT MOUSE BUTTON
+    }
+
     if (!freeCameraMode){
         player.handleInput(input);
     } else {
         freeCamera.KeyboardInput(input, deltaTime);
+        player.setPosition(freeCamera.getPosition() - glm::vec3(0.0f, 1.62f, 0.0f));
     }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS){

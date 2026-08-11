@@ -28,6 +28,9 @@ class Camera{
         void updatePosition(glm::vec3 delta){
             Position += delta;
         }
+        glm::vec3 getFront(){
+            return Front;
+        }
         glm::vec3 getPosition(){
             return Position;
         }

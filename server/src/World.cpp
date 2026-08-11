@@ -142,6 +142,24 @@ Block World::getBlockAt(const glm::ivec3 &position) const {
 
 }
 
+void World::updateBlock(glm::ivec3 position, Block block) {
+
+    int chunkColumnX = std::floor(static_cast<float>(position.x) / WorldConfig::CHUNK_SIZE);
+    int chunkColumnZ = std::floor(static_cast<float>(position.z) / WorldConfig::CHUNK_SIZE);
+
+    auto it = chunkColumns.find({chunkColumnX, chunkColumnZ});
+    if (it == chunkColumns.end()) {
+        return; // Chunk column not loaded
+    }
+    if (position.y < 0 || position.y >= WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT) {
+        return; // Y position out of bounds
+    }
+    int chunkPosX = position.x - chunkColumnX * WorldConfig::CHUNK_SIZE;
+    int chunkPosZ = position.z - chunkColumnZ * WorldConfig::CHUNK_SIZE;
+    it->second->blocks[chunkPosX][position.y][chunkPosZ] = block;
+
+}
+
 World::~World() {
 
 }

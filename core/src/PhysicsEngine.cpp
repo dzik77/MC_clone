@@ -234,6 +234,71 @@ bool checkOnGround(const Entity &entity, const IWorldAccessor &worldAccessor) {
     return false;
 }
 
+
+RaycastResult raycast(glm::vec3 origin, glm::vec3 direction, float maxDistance, const IWorldAccessor& worldAccessor) {
+
+    RaycastResult result;
+    result.hit = false;
+
+    glm::vec3 currentPosition = origin;
+    glm::vec3 previousPosition = currentPosition;
+
+    glm::vec3 step, tDelta, tMax;
+
+    step.x = (direction.x > 0.0f) ? 1.0f : (direction.x < 0.0f) ? -1.0f : 0.0f;
+    step.y = (direction.y > 0.0f) ? 1.0f : (direction.y < 0.0f) ? -1.0f : 0.0f;
+    step.z = (direction.z > 0.0f) ? 1.0f : (direction.z < 0.0f) ? -1.0f : 0.0f;
+
+    tDelta.x = (direction.x != 0.0f) ? std::abs(1.0f / direction.x) : std::numeric_limits<float>::max();
+    tDelta.y = (direction.y != 0.0f) ? std::abs(1.0f / direction.y) : std::numeric_limits<float>::max();
+    tDelta.z = (direction.z != 0.0f) ? std::abs(1.0f / direction.z) : std::numeric_limits<float>::max();
+
+    tMax.x = (direction.x > 0.0f) ? (std::floor(currentPosition.x) + 1.0f - currentPosition.x) * tDelta.x :  (currentPosition.x - std::floor(currentPosition.x)) * tDelta.x; // no overflow max 1.0f * maxfloat
+    tMax.y = (direction.y > 0.0f) ? (std::floor(currentPosition.y) + 1.0f - currentPosition.y) * tDelta.y : (currentPosition.y - std::floor(currentPosition.y)) * tDelta.y;
+    tMax.z = (direction.z > 0.0f) ? (std::floor(currentPosition.z) + 1.0f - currentPosition.z) * tDelta.z : (currentPosition.z - std::floor(currentPosition.z)) * tDelta.z;
+
+    float currentDistance = 0.0f;
+
+    while (currentDistance <= maxDistance) {
+
+        glm::ivec3 blockPos = glm::floor(currentPosition);
+        Block block = worldAccessor.getBlockAt(blockPos);
+        if (isSolid(block)) {
+            result.hit = true;
+            result.hitVoxel = glm::vec3(blockPos);
+            result.placementVoxel = glm::vec3(glm::floor(previousPosition));
+            return result;
+        }
+
+        previousPosition = currentPosition;
+
+        if (tMax.x < tMax.y){
+            if (tMax.x < tMax.z){
+                currentPosition.x += step.x;
+                currentDistance = tMax.x;
+                tMax.x += tDelta.x;
+            } else {
+                currentPosition.z += step.z;
+                currentDistance = tMax.z;
+                tMax.z += tDelta.z;
+            }
+        } else {
+            if (tMax.y < tMax.z){
+                currentPosition.y += step.y;
+                currentDistance = tMax.y;
+                tMax.y += tDelta.y;
+            } else {
+                currentPosition.z += step.z;
+                currentDistance = tMax.z;
+                tMax.z += tDelta.z;
+            }
+        }
+
+    }
+
+    return result;
+}
+
 void applyGravity(Entity &entity, float deltaTime) {
     if (!entity.onGround){
         entity.velocity.y += gravity * deltaTime;

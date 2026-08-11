@@ -23,6 +23,20 @@ void Player::handleInput(uint8_t input) {
     }
     velocity = glm::vec3(movement.x, velocity.y, movement.z);
 
+    // Block updates
+    if (input & 0b1000000) { // RIGHT MOUSE BUTTON
+        RaycastResult raycastResult = raycast(camera.getPosition(), camera.getFront(), 5.0f, *worldAccessor);
+        if (raycastResult.hit) {
+            worldAccessor->updateBlock(raycastResult.placementVoxel, Block::STONE);
+        }
+    }
+    if (input & 0b10000000) { // LEFT MOUSE BUTTON
+        RaycastResult raycastResult = raycast(camera.getPosition(), camera.getFront(), 5.0f, *worldAccessor);
+        if (raycastResult.hit) {
+            worldAccessor->updateBlock(raycastResult.hitVoxel, Block::AIR);
+        }
+    }
+
     currentState.input = input;
 
 }
@@ -51,11 +65,11 @@ void Player::MouseInput(float xoffset, float yoffset) {
 
 }
 
-void Player::updatePhysics(float deltaTime, const IWorldAccessor &worldAccessor) {
+void Player::updatePhysics(float deltaTime) {
 
     applyGravity(*this, deltaTime);
-    glm::vec3 movementDelta = updateEntity(*this, deltaTime, worldAccessor);
-    onGround = checkOnGround(*this, worldAccessor);
+    glm::vec3 movementDelta = updateEntity(*this, deltaTime, *worldAccessor);
+    onGround = checkOnGround(*this, *worldAccessor);
     camera.updatePosition(movementDelta);
     currentState.predictedPosition = position;
     currentState.yaw = Yaw;

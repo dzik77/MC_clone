@@ -18,6 +18,7 @@ class World : public IWorldAccessor {
         World();
         ~World();
         void getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket);
+        void updateBlock(glm::ivec3 position, Block block) override;
         
     private:
         

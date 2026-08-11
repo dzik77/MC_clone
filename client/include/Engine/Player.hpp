@@ -15,10 +15,15 @@ class Player : Entity {
             WorldUp = glm::vec3(0.0f,1.0f,0.0f);
             setPosition(glm::vec3(0.0f, 80.0f, 0.0f));
             onGround = false;
+            currentState = {0, glm::vec3(0.0f, 80.0f, 0.0f), -90.0f, 0.0f, 0, 0.0f, 0.0f, 0.0f};
         }
         ~Player() {}
 
         Camera camera;
+
+        void initialize(IWorldAccessor* worldAccessor) {
+            this->worldAccessor = worldAccessor;
+        }
 
         float getYaw() const {
             return Yaw;
@@ -34,8 +39,7 @@ class Player : Entity {
         void setPosition(glm::vec3 position) {
             this->position = position;
             camera.setPosition(position + glm::vec3(0.0f, 1.62f, 0.0f));
-            boundingBox.min = position - glm::vec3(0.3f, 0.0f, 0.3f);
-            boundingBox.max = position + glm::vec3(0.3f, 1.8f, 0.3f);
+            setBoundingBoxForPlayer(*this);
         }
         glm::vec3 getPosition() const {
             return position;
@@ -49,10 +53,12 @@ class Player : Entity {
         
         void handleInput(uint8_t input);
         void MouseInput(float xoffset, float yoffset);
-        void updatePhysics(float deltaTime, const IWorldAccessor& worldAccessor);
+        void updatePhysics(float deltaTime);
         
     private:
         
+        IWorldAccessor* worldAccessor = nullptr;
+
         SavedClientState currentState;
 
         glm::vec3 
@@ -61,8 +67,8 @@ class Player : Entity {
             WorldUp = glm::vec3(0.0f,1.0f,0.0f);
 
         float 
-            MovementSpeed = 4.317f,
-            JumpSpeed = 8.4f,
+            MovementSpeed = 4.317f, // orig 4.317f
+            JumpSpeed = 8.4f, // orig 8.4f
             MouseSensivity = 0.1f,
             Yaw = -90.0f,
             Pitch = 0.0f;

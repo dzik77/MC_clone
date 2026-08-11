@@ -40,6 +40,33 @@ FetchContent_MakeAvailable(glm)
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 
+# ImGui
+FetchContent_Declare(
+  imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG docking
+)
+FetchContent_GetProperties(imgui)
+if(NOT imgui_POPULATED)
+  FetchContent_Populate(imgui)
+  add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  )
+  target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
+
+  # ImGui Backends
+  add_library(imgui_backends STATIC
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+  )
+  target_include_directories(imgui_backends PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+  target_link_libraries(imgui_backends PUBLIC imgui glfw OpenGL::GL)
+endif()
+
 # FastNoise2
 set(FASTNOISE2_NOISETOOL OFF CACHE BOOL "Build Noise Tool" FORCE)
 set(FASTNOISE2_TESTS OFF CACHE BOOL "Build tests" FORCE)
@@ -54,12 +81,12 @@ file(GLOB_RECURSE CORE_SRC CONFIGURE_DEPENDS "core/src/*.cpp" "core/src/*.c")
 if(CORE_SRC)
     add_library(core_lib STATIC ${CORE_SRC})
     target_include_directories(core_lib PUBLIC core/include)
-    target_link_libraries(core_lib PUBLIC enet glm::glm FastNoise)
+    target_link_libraries(core_lib PUBLIC enet glm::glm FastNoise imgui)
 else()
     # Dummy target if empty so we don't break CMake before you move files
     add_library(core_lib INTERFACE)
     target_include_directories(core_lib INTERFACE core/include)
-    target_link_libraries(core_lib INTERFACE enet glm::glm FastNoise)
+    target_link_libraries(core_lib INTERFACE enet glm::glm FastNoise imgui)
 endif()
 
 # 2. Server Executable
@@ -78,7 +105,8 @@ file(GLOB_RECURSE CLIENT_SRC CONFIGURE_DEPENDS "client/src/*.cpp" "client/src/*.
 if(CLIENT_SRC)
     add_executable(client_app ${CLIENT_SRC})
     target_include_directories(client_app PRIVATE client/include)
-    target_link_libraries(client_app PRIVATE core_lib glfw OpenGL::GL Threads::Threads)
+    target_compile_definitions(client_app PRIVATE DEBUG)
+    target_link_libraries(client_app PRIVATE core_lib glfw OpenGL::GL Threads::Threads imgui_backends)
     if(WIN32)
         target_link_libraries(client_app PRIVATE ws2_32 winmm)
     elseif(UNIX AND NOT APPLE)

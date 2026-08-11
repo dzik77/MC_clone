@@ -16,7 +16,13 @@
 #include <Engine/Player.hpp>
 #include <Engine/FreeCamera.hpp>
 
-#define DEBUG
+// DEBUGGING
+
+#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
+
+// #define DEBUG handled by CMake
 //#define AZDO_RENDERING
 
 class Game{

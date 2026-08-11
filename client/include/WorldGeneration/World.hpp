@@ -11,6 +11,7 @@
 #include <stack>
 #include <map>
 #include <queue>
+#include <deque>
 #include <numeric>
 #include <IWorldAccesor.hpp>
 #include <mutex>
@@ -35,7 +36,12 @@ class World : public IWorldAccessor {
         void loadTerrain();
         void generateMesh();
         void loadChunks(glm::vec3 playerPosition);
+        void updateBlock(glm::ivec3 position, Block block) override;
+        void requestChunk(glm::ivec2 chunkColumnPos);
         void render(Shader& shader, glm::vec3 playerPosition);
+#ifdef DEBUG
+        void renderDebugWindow(glm::vec3 playerPosition);
+#endif
         void clean();
         void setServerPeer(ENetPeer* peer) { serverPeer = peer; }
         ~World();
@@ -72,7 +78,7 @@ class World : public IWorldAccessor {
         TextureArray textureArray;
         
         // render distance
-        int renderDistance = 32;
+        int renderDistance = 10;
         std::vector<glm::ivec2> chunksToLoadOffset; // based on render distance, calculated in setRenderDistance
         
         // allocator
@@ -93,6 +99,7 @@ class World : public IWorldAccessor {
         ankerl::unordered_dense::set<glm::ivec2, IVec2Hash> chunksGeneratedOnEdge;
         
         // Chunks waiting for mesh generation
+        void regenerateMeshForChunk(glm::ivec2 position);
         struct MeshJob {
             std::shared_ptr<ChunkColumn> chunkColumn;
             int columnHeight;
@@ -102,7 +109,8 @@ class World : public IWorldAccessor {
             std::shared_ptr<ChunkColumn> chunkColumn_Right;
             int timestamp;
         };
-        std::queue<MeshJob> chunksToGenerateMeshQueue;
+        int timeStamp = 0;
+        std::deque<MeshJob> chunksToGenerateMeshQueue;
         std::mutex chunksToGenerateMeshQueue_mutex;
         std::condition_variable chunksToGenerateMeshQueue_cv;
         const int meshesToGeneratePerThread = 10;

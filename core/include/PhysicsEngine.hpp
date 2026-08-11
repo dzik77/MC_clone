@@ -19,8 +19,20 @@ struct Entity {
     AABB boundingBox;
 };
 
+inline void setBoundingBoxForPlayer(Entity& entity) {
+    entity.boundingBox.min = entity.position - glm::vec3(0.3f, 0.0f, 0.3f);
+    entity.boundingBox.max = entity.position + glm::vec3(0.3f, 1.8f, 0.3f);
+}
+
 glm::vec3 updateEntity(Entity& entity, float deltaTime, const IWorldAccessor& worldAccessor);
 bool checkOnGround(const Entity& entity, const IWorldAccessor& worldAccessor);
+
+struct RaycastResult {
+    bool hit;
+    glm::vec3 hitVoxel;
+    glm::vec3 placementVoxel;
+};
+RaycastResult raycast(glm::vec3 origin, glm::vec3 direction, float maxDistance, const IWorldAccessor& worldAccessor);
 
 constexpr float gravity = -32.0f; // m/s^2
 void applyGravity(Entity& entity, float deltaTime);

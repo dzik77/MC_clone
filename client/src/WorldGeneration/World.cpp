@@ -1,4 +1,5 @@
 #include <WorldGeneration/World.hpp>
+#include <imgui.h>
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
@@ -96,6 +97,10 @@ void World::loadTextures() {
 
 void World::generateTerrain(ChunkColumn &chunkColumn) {
 
+#ifdef DEBUG
+    chunkColumn.debugState = ChunkColumn::ChunkDebugState::Requested;
+#endif
+
     // load from server TODO:
     // i guess for now just auto wait for the chunk
 
@@ -160,6 +165,70 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
 
 }
 
+void World::updateBlock(glm::ivec3 position, Block block) {
+
+    glm::ivec2 chunkColumnPos = {
+        static_cast<int>(std::floor(static_cast<float>(position.x) / WorldConfig::CHUNK_SIZE)), 
+        static_cast<int>(std::floor(static_cast<float>(position.z) / WorldConfig::CHUNK_SIZE))
+    };
+    auto it = chunkColumn.find(chunkColumnPos);
+    if (it == chunkColumn.end()){
+        return; // chunk column not loaded, ignore
+    }
+    if (position.y < 0 || position.y >= WorldConfig::CHUNK_COLUMN_HEIGHT * WorldConfig::CHUNK_SIZE) {
+        return; // out of bounds, ignore
+    }
+    int chunkPosX = position.x - chunkColumnPos.x * WorldConfig::CHUNK_SIZE;
+    int chunkPosZ = position.z - chunkColumnPos.y * WorldConfig::CHUNK_SIZE;
+    it->second->blocks[chunkPosX][position.y][chunkPosZ] = block;
+
+    regenerateMeshForChunk(chunkColumnPos);
+    regenerateMeshForChunk({chunkColumnPos.x-1, chunkColumnPos.y});
+    regenerateMeshForChunk({chunkColumnPos.x+1, chunkColumnPos.y});
+    regenerateMeshForChunk({chunkColumnPos.x, chunkColumnPos.y-1});
+    regenerateMeshForChunk({chunkColumnPos.x, chunkColumnPos.y+1});
+
+}
+
+void World::regenerateMeshForChunk(glm::ivec2 position) {
+
+    auto it = chunkColumn.find(position);
+    if (it == chunkColumn.end()){
+        return; // chunk column not loaded, ignore
+    }
+
+    // add to mesh queue for priority meshing
+    std::shared_ptr<ChunkColumn> 
+        chunkColumFront(nullptr), 
+        chunkColumBack(nullptr), 
+        chunkColumLeft(nullptr), 
+        chunkColumRight(nullptr);
+    auto itFront = chunkColumn.find({position.x, position.y+1});
+    if (itFront != chunkColumn.end()){
+        chunkColumFront = itFront->second;
+    }
+    auto itBack = chunkColumn.find({position.x, position.y-1});
+    if (itBack != chunkColumn.end()){
+        chunkColumBack = itBack->second;
+    }
+    auto itLeft = chunkColumn.find({position.x-1, position.y});
+    if (itLeft != chunkColumn.end()){
+        chunkColumLeft = itLeft->second;
+    }
+    auto itRight = chunkColumn.find({position.x+1, position.y});
+    if (itRight != chunkColumn.end()){
+        chunkColumRight = itRight->second;
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
+        int chunkHeight = position.y / WorldConfig::CHUNK_SIZE;
+        chunksToGenerateMeshQueue.push_front({it->second, chunkHeight, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++}); // priority meshing, timestamp 0
+    }
+    chunksToGenerateMeshQueue_cv.notify_one();
+
+}
+
 void World::loadTerrain() {
     
     while (!receivedChunks.empty()) {
@@ -167,13 +236,21 @@ void World::loadTerrain() {
         auto chunkPacket = receivedChunks.front();
         receivedChunks.pop();
 
+        if (chunkPacket.y < 0 || chunkPacket.y >= WorldConfig::CHUNK_COLUMN_HEIGHT) {
+            continue;
+        }
+
         glm::ivec2 chunkColumnPos = {chunkPacket.x, chunkPacket.z};
         auto it = chunkColumn.find(chunkColumnPos);
-    
+        
+        //std::cout << "Received chunk at position: (" << chunkPacket.x << ", " << chunkPacket.y << ", " << chunkPacket.z << ")" << std::endl;
+
         if (it == chunkColumn.end()){
-            return; // chunk column not loaded, ignore
+            continue; // chunk column not loaded, ignore
         }
-    
+        
+        //std::cout << "Loading chunk at position: (" << chunkPacket.x << ", " << chunkPacket.y << ", " << chunkPacket.z << ")" << std::endl;
+
         for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++) {
             for (int y = 0; y < WorldConfig::CHUNK_SIZE; y++) {
                 for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++) {
@@ -184,6 +261,9 @@ void World::loadTerrain() {
         it->second->loadedChunks++;
         if (it->second->loadedChunks == WorldConfig::CHUNK_COLUMN_HEIGHT){
             chunksToGenerateMesh.push(it->first);
+#ifdef DEBUG
+            it->second->debugState = ChunkColumn::ChunkDebugState::InMeshingQueue;
+#endif
         }
 
     }
@@ -192,8 +272,6 @@ void World::loadTerrain() {
 }
 
 void World::generateMesh() {
-
-    static int timeStamp = 0;
 
     int chunksPushed = 0;
 
@@ -230,7 +308,7 @@ void World::generateMesh() {
         {
             std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
             for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
-                chunksToGenerateMeshQueue.push({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
+                chunksToGenerateMeshQueue.push_back({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
                 chunksPushed++;
             }
         }
@@ -283,7 +361,7 @@ void World::generateMesh() {
         {
             std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
             for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
-                chunksToGenerateMeshQueue.push({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
+                chunksToGenerateMeshQueue.push_back({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
             }
         }
         
@@ -352,7 +430,7 @@ void World::meshGenerationWorkerThread() {
             }
             while (!chunksToGenerateMeshQueue.empty() && jobCount < meshesToGeneratePerThread) {
                 job[jobCount] = chunksToGenerateMeshQueue.front();
-                chunksToGenerateMeshQueue.pop();
+                chunksToGenerateMeshQueue.pop_front();
                 jobCount++;
             }
         }
@@ -452,6 +530,19 @@ void World::uploadChunksToGPU() {
 
         chunk.isMeshGenerated = true;
         chunk.hasMeshToUpload = false; // Reset the flag after uploading to GPU
+
+#ifdef DEBUG
+        bool allMeshed = true;
+        for (int i = 0; i < WorldConfig::CHUNK_COLUMN_HEIGHT; i++) {
+            if (!it->second->chunks[i].isMeshGenerated) {
+                allMeshed = false;
+                break;
+            }
+        }
+        if (allMeshed) {
+            it->second->debugState = ChunkColumn::ChunkDebugState::Ready;
+        }
+#endif
 
         chunksUploadedThisFrame++;
     }
@@ -577,3 +668,69 @@ void World::clean(){
 World::~World() {
     chunkColumn.clear();
 }
+
+#ifdef DEBUG
+void World::renderDebugWindow(glm::vec3 playerPosition) {
+    ImGui::Begin("Chunk Status");
+    
+    glm::ivec2 playerChunkPos(
+        static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)),
+        static_cast<int>(std::floor(playerPosition.z / WorldConfig::CHUNK_SIZE))
+    );
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    
+    float quadSize = 10.0f;
+    float spacing = 2.0f;
+    
+    for (int x = -renderDistance; x <= renderDistance; x++) {
+        for (int z = -renderDistance; z <= renderDistance; z++) {
+            glm::ivec2 chunkPos = playerChunkPos + glm::ivec2(x, z);
+            
+            ImU32 color = IM_COL32(50, 50, 50, 255);
+            
+            if (x*x + z*z <= renderDistance * renderDistance) {
+                auto it = chunkColumn.find(chunkPos);
+                if (it == chunkColumn.end()) {
+                    color = IM_COL32(100, 100, 100, 255);
+                } else {
+                    auto& col = it->second;
+                    switch (col->debugState.load()) {
+                        case ChunkColumn::ChunkDebugState::Requested:
+                            color = IM_COL32(200, 200, 50, 255);
+                            break;
+                        case ChunkColumn::ChunkDebugState::InMeshingQueue:
+                            color = IM_COL32(200, 100, 50, 255);
+                            break;
+                        case ChunkColumn::ChunkDebugState::Ready:
+                            color = IM_COL32(50, 200, 50, 255);
+                            break;
+                        default:
+                            color = IM_COL32(100, 100, 100, 255);
+                            break;
+                    }
+                }
+            }
+            
+            float px = p.x + (x + renderDistance) * (quadSize + spacing);
+            float py = p.y + (z + renderDistance) * (quadSize + spacing);
+            draw_list->AddRectFilled(ImVec2(px, py), ImVec2(px + quadSize, py + quadSize), color);
+            
+            if (x == 0 && z == 0) {
+                draw_list->AddRect(ImVec2(px, py), ImVec2(px + quadSize, py + quadSize), IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
+            }
+        }
+    }
+    
+    float totalSize = (renderDistance * 2 + 1) * (quadSize + spacing);
+    ImGui::Dummy(ImVec2(totalSize, totalSize));
+    
+    ImGui::TextColored(ImVec4(100/255.f, 100/255.f, 100/255.f, 1.f), "Unrequested / Wait");
+    ImGui::TextColored(ImVec4(200/255.f, 200/255.f, 50/255.f, 1.f), "Requested");
+    ImGui::TextColored(ImVec4(200/255.f, 100/255.f, 50/255.f, 1.f), "In Meshing Queue");
+    ImGui::TextColored(ImVec4(50/255.f, 200/255.f, 50/255.f, 1.f), "Ready");
+    
+    ImGui::End();
+}
+#endif
