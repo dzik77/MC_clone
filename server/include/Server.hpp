@@ -42,7 +42,6 @@ class Server{
         // Server constants
         const int TARGET_TPS = 60; // Target ticks per second
         const std::chrono::milliseconds TICK_DURATION = std::chrono::milliseconds(1000 / TARGET_TPS);
-        const int renderDistance = 32;
 
         std::atomic<bool> running;
 
@@ -68,6 +67,10 @@ class Server{
         void consoleInput();
 
         // World generation
+        int renderDistance = 32;
+        int renderDistanceServer = renderDistance + 1;
+        std::vector<glm::ivec2> chunksToLoadOffset;
+        void setRenderDistance(int distance);
         std::vector<std::thread> chunkGenerationThreads;
         const int numChunkGenerationThreads = 5;
         const int chunkToGeneratePerThread = 20;

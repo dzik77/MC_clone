@@ -105,7 +105,7 @@ file(GLOB_RECURSE CLIENT_SRC CONFIGURE_DEPENDS "client/src/*.cpp" "client/src/*.
 if(CLIENT_SRC)
     add_executable(client_app ${CLIENT_SRC})
     target_include_directories(client_app PRIVATE client/include)
-    #target_compile_definitions(client_app PRIVATE DEBUG)
+    target_compile_definitions(client_app PRIVATE DEBUG)
     target_link_libraries(client_app PRIVATE core_lib glfw OpenGL::GL Threads::Threads imgui_backends)
     if(WIN32)
         target_link_libraries(client_app PRIVATE ws2_32 winmm)

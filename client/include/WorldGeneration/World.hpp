@@ -21,6 +21,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
 #include <ankerl/unordered_dense.h>
+#include <hash.hpp>
 
 #include <enet/enet.h>
 #include <PacketType.hpp>
@@ -85,13 +86,7 @@ class World : public IWorldAccessor {
         VramAllocator vramAllocator;
         GLuint globalVAO;
         
-        // Chunks data proccesing
-        struct IVec2Hash {
-            std::size_t operator()(const glm::ivec2& k) const {
-                return std::hash<int>()(k.x) ^ (std::hash<int>()(k.y) << 1);
-            }
-        };
-        
+        // Chunks data proccesing        
         glm::ivec2 lastPlayerChunkPosition = glm::ivec2(0, 0);
         ankerl::unordered_dense::map<glm::ivec2, std::shared_ptr<ChunkColumn>, IVec2Hash> chunkColumn;
         std::stack<int> freeChunkPositionIndices;
