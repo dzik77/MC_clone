@@ -6,22 +6,13 @@
 #include <cmath>
 #include <stdexcept>
 
-const std::vector<std::filesystem::path> texturePaths = {
-    "textures/dirt.png",
-    "textures/grass_block_side.png",
-    "textures/grass_block_top_item.png",
-    "textures/stone.png",
-    "textures/water_still.png"
-};
-
-
 World::World() {
 
 
 
 }
 
-void World::initialize() {
+void World::initialize(unsigned int textureArray) {
 
     vramAllocator.initialize(140'000'000, 250'000'000);
     
@@ -34,12 +25,7 @@ void World::initialize() {
     
     glVertexArrayAttribBinding(globalVAO, 0, 0);
     glVertexArrayVertexBuffer(globalVAO, 0, vramAllocator.getVertexBufferID(), 0, sizeof(uint32_t));
-    
-    
-    std::cout << "Loading textures..." << std::endl;
-    loadTextures();
-    std::cout << "Textures loaded." << std::endl; 
-    
+        
     glCreateBuffers(1, &chunkSSBO);
     glNamedBufferStorage(chunkSSBO, PREALLOCATE_CHUNKS * sizeof(ChunkPosition), nullptr, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, chunkSSBO);
@@ -55,6 +41,8 @@ void World::initialize() {
     }
 
     setRenderDistance(renderDistance);
+
+    this->textureArray = textureArray;
 
 }
 
@@ -89,10 +77,6 @@ void World::setRenderDistance(int distance) {
 
     }
 
-}
-
-void World::loadTextures() {
-    textureArray.createTextureArray(texturePaths,16,16);
 }
 
 void World::generateTerrain(ChunkColumn &chunkColumn) {
@@ -627,7 +611,7 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
     }
 
     shader.use();
-    glBindTextureUnit(0, textureArray.texture);
+    glBindTextureUnit(0, textureArray);
     glBindVertexArray(globalVAO);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectCommandBuffer);
 
@@ -685,7 +669,6 @@ Block World::getBlockAt(const glm::ivec3& position) const {
 
 void World::clean(){
     chunkColumn.clear();
-    textureArray.clean();
 }
 
 World::~World() {

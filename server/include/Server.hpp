@@ -20,17 +20,6 @@ inline bool operator==(const ENetAddress& lhs, const ENetAddress& rhs) {
 #include <PhysicsEngine.hpp>
 #include <chrono>
 
-struct ChunkToGenerate {
-    int x;
-    int z;
-    bool send;
-    ENetPeer* peer;
-};
-struct ChunkToSend {
-    ChunkPacket chunkPacket;
-    ENetPeer* peer;
-};
-
 class Server{
     public:
 
@@ -69,8 +58,8 @@ class Server{
         void consoleInput();
 
         // World generation
-        int renderDistance = 10;
-        int renderDistanceServer = renderDistance + 1;
+        int renderDistance = 20;
+        int simulationRenderDistance = renderDistance + 1;
         std::vector<glm::ivec2> chunksToLoadOffset;
         void setRenderDistance(int distance);
         std::vector<std::thread> chunkGenerationThreads;

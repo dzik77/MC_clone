@@ -73,6 +73,7 @@ void World::getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnP
     {
         std::lock_guard<std::mutex> lock(chunkColumnsMutex);
         auto& chunkColumn = chunkColumns[chunkColumnPosition];
+        chunkColumn->playersLoadedChunkColumn++; // Increment the count of players that have loaded this chunk column
         for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
             for (int y = 0; y < WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
                 int chunkY = y / WorldConfig::CHUNK_SIZE;
@@ -125,9 +126,28 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition) {
 
 }
 
-void World::destroyChunkColumn(glm::ivec2 chunkColumnPosition) {
+void World::unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload) {
+
     std::lock_guard<std::mutex> lock(chunkColumnsMutex);
-    chunkColumns.erase(chunkColumnPosition);
+    std::vector<glm::ivec2> potentialChunkColumnsToUnload;
+
+    for (auto& chunkColumnPos : chunkColumnsToUnload) {
+        auto it = chunkColumns.find(chunkColumnPos);
+        if (it != chunkColumns.end()) {
+            it->second->playersLoadedChunkColumn--;
+            if (it->second->playersLoadedChunkColumn <= 0) {
+                potentialChunkColumnsToUnload.push_back(chunkColumnPos);
+            }
+        }
+    }
+
+    for (auto& chunkColumnPos : potentialChunkColumnsToUnload) {
+        // must exists to be pushed to stack
+        if (chunkColumns[chunkColumnPos]->playersLoadedChunkColumn <= 0) {
+            chunkColumns.erase(chunkColumnPos);
+        }
+    }
+
 }
 
 Block World::getBlockAt(const glm::ivec3 &position) const {

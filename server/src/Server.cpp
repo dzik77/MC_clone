@@ -22,13 +22,13 @@ Server::Server() {
 
 void Server::setRenderDistance(int distance) {
     renderDistance = distance;
-    renderDistanceServer = renderDistance + 1;
-    std::vector<std::vector<bool>> visited(renderDistanceServer * 2 + 1, std::vector<bool>(renderDistanceServer * 2 + 1, false));
+    simulationRenderDistance = renderDistance + 1;
+    std::vector<std::vector<bool>> visited(simulationRenderDistance * 2 + 1, std::vector<bool>(simulationRenderDistance * 2 + 1, false));
     chunksToLoadOffset.clear();
 
     std::queue<glm::ivec2> q;
-    q.push({renderDistanceServer, renderDistanceServer});
-    visited[renderDistanceServer][renderDistanceServer] = true;
+    q.push({simulationRenderDistance, simulationRenderDistance});
+    visited[simulationRenderDistance][simulationRenderDistance] = true;
 
     glm::ivec2 offsets[4] = {{1,0},{-1,0},{0,1},{0,-1}};
 
@@ -37,8 +37,8 @@ void Server::setRenderDistance(int distance) {
         q.pop();
         int x = pos.x;
         int y = pos.y;
-        if ((x - renderDistanceServer) * (x - renderDistanceServer) + (y - renderDistanceServer) * (y - renderDistanceServer) <= renderDistanceServer * renderDistanceServer) {
-            chunksToLoadOffset.push_back({x - renderDistanceServer, y - renderDistanceServer});
+        if ((x - simulationRenderDistance) * (x - simulationRenderDistance) + (y - simulationRenderDistance) * (y - simulationRenderDistance) <= simulationRenderDistance * simulationRenderDistance) {
+            chunksToLoadOffset.push_back({x - simulationRenderDistance, y - simulationRenderDistance});
             for (auto offset : offsets) {
                 int nx = x + offset.x;
                 int ny = y + offset.y;
@@ -99,6 +99,7 @@ void Server::run() {
         }
 
         // update chunks for players
+        std::vector<glm::ivec2> chunkColumnsToUnload;
         for (auto& [address, player] : connectedClients) {
             //std::cout << "Player at position: (" << player.position.x << ", " << player.position.y << ", " << player.position.z << ")" << std::endl;
             glm::ivec2 currentChunkColumnPos = {static_cast<int>(std::floor(player.position.x / WorldConfig::CHUNK_SIZE)),
@@ -111,12 +112,26 @@ void Server::run() {
             }
             if (currentChunkColumnPos != player.previousChunkColumnPosition || isNewlyConnected || 1) {
 
-                //std::cout << "UPDATING CHUNKS FOR PLAYER AT POSITION: (" << player.position.x << ", " << player.position.y << ", " << player.position.z << ")" << std::endl;
+                // unloading chunks based on render distance
+                for (auto chunkColumnPos : player.sentAndLoadedChunkColumns) {
+                    if ((currentChunkColumnPos.x - chunkColumnPos.x) * (currentChunkColumnPos.x - chunkColumnPos.x) +
+                        (currentChunkColumnPos.y - chunkColumnPos.y) * (currentChunkColumnPos.y - chunkColumnPos.y) > renderDistance * renderDistance) {
+                        chunkColumnsToUnload.push_back(chunkColumnPos);
+                        player.sentAndLoadedChunkColumns.erase(chunkColumnPos);
+                    }
+                }
+                for (auto chunkColumnPos : player.loadedChunkColumns) {
+                    if ((currentChunkColumnPos.x - chunkColumnPos.x) * (currentChunkColumnPos.x - chunkColumnPos.x) +
+                        (currentChunkColumnPos.y - chunkColumnPos.y) * (currentChunkColumnPos.y - chunkColumnPos.y) > simulationRenderDistance * simulationRenderDistance) {
+                        chunkColumnsToUnload.push_back(chunkColumnPos);
+                        player.loadedChunkColumns.erase(chunkColumnPos);
+                    }
+                }
 
-                // check if the player has already been sent the chunk column
+                // loading chunks based on render distance
                 for (auto& offset : chunksToLoadOffset) {
                     glm::ivec2 chunkColumnToLoad = currentChunkColumnPos + offset;
-                    bool sendChunk = (currentChunkColumnPos.x - chunkColumnToLoad.x) * (currentChunkColumnPos.x - chunkColumnToLoad.x) + 
+                    bool sendChunk = (currentChunkColumnPos.x - chunkColumnToLoad.x) * (currentChunkColumnPos.x - chunkColumnToLoad.x) +
                                      (currentChunkColumnPos.y - chunkColumnToLoad.y) * (currentChunkColumnPos.y - chunkColumnToLoad.y) <= renderDistance * renderDistance;
                     if (sendChunk){
                         
@@ -165,7 +180,10 @@ void Server::run() {
             }
 
         }
-        
+
+        world.unloadChunkColumns(chunkColumnsToUnload);
+        world.loadedChunkColumn();
+
         // Chunk sending
         {
             std::lock_guard<std::mutex> lock(chunksToSendMutex);

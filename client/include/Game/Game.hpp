@@ -15,6 +15,7 @@
 #include <Engine/Networking.hpp>
 #include <Engine/Player.hpp>
 #include <Engine/FreeCamera.hpp>
+#include <Engine/TextureManager.hpp>
 
 // DEBUGGING
 
@@ -40,6 +41,17 @@ class Game{
         const std::filesystem::path vertexShaderPath{"Shaders/vertex.glsl"};
         const std::filesystem::path fragmentShaderPath{"Shaders/fragment.glsl"};
         Shader shader;
+
+        //Texture
+        TextureArray textureArray;
+        void loadTextures();
+        const std::vector<std::filesystem::path> texturePaths = {
+            "textures/dirt.png",
+            "textures/grass_block_side.png",
+            "textures/grass_block_top_item.png",
+            "textures/stone.png",
+            "textures/water_still.png"
+        };
 
         Networking networking;
 

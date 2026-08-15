@@ -2,6 +2,7 @@
 #include <Block.hpp>
 #include <WorldConfig.hpp>
 #include <cstring>
+#include <enet/enet.h>
 
 enum class ChunkColumnState : uint8_t {
     UNLOADED ,
@@ -17,4 +18,14 @@ struct ChunkColumn{
     ChunkColumnState state = ChunkColumnState::UNLOADED;
     Block blocks[WorldConfig::CHUNK_SIZE][WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE];
     int playersLoadedChunkColumn = 0; // Number of players that have loaded this chunk column
+};
+struct ChunkToGenerate {
+    int x;
+    int z;
+    bool send;
+    ENetPeer* peer;
+};
+struct ChunkToSend {
+    ChunkPacket chunkPacket;
+    ENetPeer* peer;
 };

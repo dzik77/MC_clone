@@ -12,6 +12,7 @@
 #include <queue>
 #include <mutex>
 #include <hash.hpp>
+#include <iostream>
 
 class World : public IWorldAccessor {
     public:
@@ -22,7 +23,11 @@ class World : public IWorldAccessor {
         // terain generation
         void generateTerrain(glm::ivec2 chunkColumnPosition);
         void getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket);
-        void destroyChunkColumn(glm::ivec2 chunkColumnPosition);
+        void unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload);
+
+        void loadedChunkColumn(){
+            std::cout << "Loaded chunk columns: " << chunkColumns.size() << std::endl;
+        }
 
         // IWorldAccessor interface
         void updateBlock(glm::ivec3 position, Block block) override;

@@ -94,16 +94,27 @@ Game::Game() {
     shader.initialize(vertexShaderPath, fragmentShaderPath);
     std::cout << "Shaders loaded." << std::endl;
 
-    world.initialize();
+    // textures
+    loadTextures();
+
+    world.initialize(textureArray.texture);
+    
     
     // player
     player.initialize(&world);
     
 }
 
+void Game::loadTextures() {
+    std::cout << "Loading textures..." << std::endl;
+    textureArray.createTextureArray(texturePaths,16,16);
+    std::cout << "Textures loaded." << std::endl; 
+}
+
 Game::~Game(){
 
     world.clean();
+    textureArray.clean();
 
 #ifdef DEBUG
     ImGui_ImplOpenGL3_Shutdown();

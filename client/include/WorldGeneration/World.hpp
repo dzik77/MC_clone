@@ -32,7 +32,7 @@ class World : public IWorldAccessor {
     public:
     
         World();
-        void initialize();
+        void initialize(unsigned int textureArray);
         void generateTerrain(ChunkColumn &chunkColumn);
         void loadTerrain();
         void generateMesh();
@@ -75,11 +75,11 @@ class World : public IWorldAccessor {
         // networking
         ENetPeer* serverPeer; // MUST BE SET
         
-        void loadTextures();
-        TextureArray textureArray;
-        
+        // textures
+        unsigned int textureArray;
+
         // render distance
-        int renderDistance = 10;
+        int renderDistance = 20;
         std::vector<glm::ivec2> chunksToLoadOffset; // based on render distance, calculated in setRenderDistance
         
         // allocator
