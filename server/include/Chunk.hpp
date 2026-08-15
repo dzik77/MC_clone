@@ -17,6 +17,7 @@ struct ChunkColumn{
     }
     ChunkColumnState state = ChunkColumnState::UNLOADED;
     Block blocks[WorldConfig::CHUNK_SIZE][WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE];
+    glm::ivec2 position;
     int playersLoadedChunkColumn = 0; // Number of players that have loaded this chunk column
 };
 struct ChunkToGenerate {
@@ -26,6 +27,7 @@ struct ChunkToGenerate {
     ENetPeer* peer;
 };
 struct ChunkToSend {
-    ChunkPacket chunkPacket;
+    ChunkColumn chunkPacket;
+    bool upload = false;
     ENetPeer* peer;
 };

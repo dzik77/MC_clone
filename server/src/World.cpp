@@ -51,6 +51,7 @@ World::World() {
 
 }
 
+/* deprecated
 void World::getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket) {
     
     bool chunkColumnExists;
@@ -86,8 +87,62 @@ void World::getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnP
     }
 
 }
+*/
 
-void World::generateTerrain(glm::ivec2 chunkColumnPosition) {
+void World::loadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
+
+    ChunkToGenerate chunkToGenerate;
+    chunkToGenerate.x = chunkColumnPosition.x;
+    chunkToGenerate.z = chunkColumnPosition.y;
+    chunkToGenerate.send = false;
+    chunkToGenerate.peer = peer;
+    {
+        std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
+        chunksToGenerate.push(chunkToGenerate);
+        chunksToGenerateCV.notify_one();
+    }
+
+}
+
+void World::sentAndLoadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
+
+    ChunkToGenerate chunkToGenerate;
+    chunkToGenerate.x = chunkColumnPosition.x;
+    chunkToGenerate.z = chunkColumnPosition.y;
+    chunkToGenerate.send = true;
+    chunkToGenerate.peer = peer;
+    {
+        std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
+        chunksToGenerate.push(chunkToGenerate);
+        chunksToGenerateCV.notify_one();
+    }
+
+}
+
+ChunkPacket* World::chunkColumnToPacket(ChunkColumn& chunkColumn){
+    ChunkPacket* chunkColumnPacket = new ChunkPacket[WorldConfig::CHUNK_COLUMN_HEIGHT];
+
+    for (int y = 0; y < WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
+        chunkColumnPacket[y].x = chunkColumn.position.x;
+        chunkColumnPacket[y].z = chunkColumn.position.y;
+        chunkColumnPacket[y].y = y;
+        std::memset(chunkColumnPacket[y].chunkBlocks, 0, sizeof(chunkColumnPacket[y].chunkBlocks));
+    }
+    
+    for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
+        for (int y = 0; y < WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
+            int chunkY = y / WorldConfig::CHUNK_SIZE;
+            int localY = y % WorldConfig::CHUNK_SIZE;
+            for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
+                chunkColumnPacket[chunkY].chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + localY * WorldConfig::CHUNK_SIZE + z] = chunkColumn.blocks[x][y][z];
+            }
+        }
+    }
+
+    return chunkColumnPacket;
+}
+
+void World::generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
 
     // Generate noise values for the chunk column (SIMD optimized)
     std::vector<float> continentalnessBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), erosionBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), peaksAndValleysBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), chunkBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE);
@@ -95,7 +150,10 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition) {
     erosionFractal->GenUniformGrid2D(erosionBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
     peaksAndValleysFractal->GenUniformGrid2D(peaksAndValleysBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
 
-    auto chunkColumn = std::make_unique<ChunkColumn>();
+    ChunkToSend chunkToSend;
+    auto& chunkColumn = chunkToSend.chunkPacket;
+    chunkToSend.upload = true;
+    chunkToSend.peer = peer;
 
     // Combine the noise values to determine the final height of each column in the chunk
     for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
@@ -110,7 +168,7 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition) {
             for (int y = 0; y <= fillHeight; y++){
                 int chunkY = y / WorldConfig::CHUNK_SIZE;
                 int localY = y % WorldConfig::CHUNK_SIZE;
-                chunkColumn->blocks[x][y][z] = getBlockFromHeight(y, height);
+                chunkColumn.blocks[x][y][z] = getBlockFromHeight(y, height);
             }
             //chunkColumn.Blocks[x][0][z] = 1;
             //chunkColumn.Blocks[x][63][z] = 2;
@@ -120,15 +178,14 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition) {
     }
 
     {
-        std::lock_guard<std::mutex> lock(chunkColumnsMutex);
-        chunkColumns[chunkColumnPosition] = std::move(chunkColumn);
+        std::lock_guard<std::mutex> lock(chunksToSendMutex);
+        chunksToSend.push(chunkToSend);
     }
 
 }
 
 void World::unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload) {
 
-    std::lock_guard<std::mutex> lock(chunkColumnsMutex);
     std::vector<glm::ivec2> potentialChunkColumnsToUnload;
 
     for (auto& chunkColumnPos : chunkColumnsToUnload) {
@@ -146,6 +203,42 @@ void World::unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload) {
         if (chunkColumns[chunkColumnPos]->playersLoadedChunkColumn <= 0) {
             chunkColumns.erase(chunkColumnPos);
         }
+    }
+
+}
+
+void World::terrainGenerationWorkerThread() {
+
+    int chunksGenerated = 0;
+    while (terrainGenerationThreadsRunning) {
+
+        ChunkToGenerate chunkToGenerate[chunkToGeneratePerThread];
+        int chunksToGenerateCount = 0;
+
+        {
+            std::unique_lock<std::mutex> lock(chunksToGenerateMutex);
+
+            chunksToGenerateCV.wait(lock, [this] { 
+                return !chunksToGenerate.empty() || !terrainGenerationThreadsRunning;
+            });
+
+            if (!terrainGenerationThreadsRunning) {
+                break; // Exit the thread if the flag is set to false
+            }
+
+            while (chunksToGenerateCount < chunkToGeneratePerThread && !chunksToGenerate.empty()) {
+                chunkToGenerate[chunksToGenerateCount] = chunksToGenerate.front();
+                chunksToGenerate.pop();
+                chunksToGenerateCount++;
+            }
+        }
+
+
+        ChunkPacket chunkPackets[chunkToGeneratePerThread][WorldConfig::CHUNK_COLUMN_HEIGHT];
+        for (int i = 0; i < chunksToGenerateCount; i++){
+            generateTerrain({chunkToGenerate[i].x, chunkToGenerate[i].z}, chunkToGenerate[i].peer);
+        }
+
     }
 
 }

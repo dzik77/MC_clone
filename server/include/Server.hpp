@@ -62,18 +62,6 @@ class Server{
         int simulationRenderDistance = renderDistance + 1;
         std::vector<glm::ivec2> chunksToLoadOffset;
         void setRenderDistance(int distance);
-        std::vector<std::thread> chunkGenerationThreads;
-        const int numChunkGenerationThreads = 5;
-        const int chunkToGeneratePerThread = 20;
         World world;
-
-        std::queue<ChunkToGenerate> chunksToGenerate;
-        std::mutex chunksToGenerateMutex;
-        std::condition_variable chunksToGenerateCV;
-
-        std::queue<ChunkToSend> chunksToSend;
-        std::mutex chunksToSendMutex;
-
-        void generateChunks(int threadId);
 
 };

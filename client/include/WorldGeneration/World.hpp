@@ -65,6 +65,7 @@ class World : public IWorldAccessor {
                     thread.join();
                 }
             }
+            meshGenerationThreads.clear();
         }
 
         // multithreading

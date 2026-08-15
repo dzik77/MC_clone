@@ -13,6 +13,8 @@
 #include <mutex>
 #include <hash.hpp>
 #include <iostream>
+#include <thread>
+#include <condition_variable>
 
 class World : public IWorldAccessor {
     public:
@@ -21,17 +23,47 @@ class World : public IWorldAccessor {
         ~World();
 
         // terain generation
-        void generateTerrain(glm::ivec2 chunkColumnPosition);
-        void getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket);
+        void loadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
+        void sentAndLoadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
+        void generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
+        ChunkPacket* chunkColumnToPacket(ChunkColumn& chunkColumn);
+        void uploadChunkColumn(ChunkColumn chunkColumn){
+            std::shared_ptr<ChunkColumn> chunkColumnPtr = std::make_shared<ChunkColumn>(chunkColumn);
+            chunkColumns[chunkColumn.position] = chunkColumnPtr;
+        }
+
         void unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload);
 
         void loadedChunkColumn(){
             std::cout << "Loaded chunk columns: " << chunkColumns.size() << std::endl;
         }
-
+        
         // IWorldAccessor interface
         void updateBlock(glm::ivec3 position, Block block) override;
         
+        // Multithreading
+        std::condition_variable chunksToGenerateCV;
+       
+        std::queue<ChunkToSend> chunksToSend;
+        std::mutex chunksToSendMutex;
+        
+        void startTerrainGenerationThreads() {
+            terrainGenerationThreadsRunning = true;
+            for (int i = 0; i < terrainGenerationThreadsCount; i++) {
+                terrainGenerationThreads.emplace_back(&World::terrainGenerationWorkerThread, this);
+            }
+        }
+        void stopTerrainGenerationThreads() {
+            terrainGenerationThreadsRunning = false;
+            chunksToGenerateCV.notify_all();
+            for (auto& thread : terrainGenerationThreads) {
+                if (thread.joinable()) {
+                    thread.join();
+                }
+            }
+            terrainGenerationThreads.clear();
+        }
+
     private:
         
     // Noise generator for terrain generation
@@ -46,8 +78,18 @@ class World : public IWorldAccessor {
     
 
     // Chunk data
-    ankerl::unordered_dense::map<glm::ivec2, std::unique_ptr<ChunkColumn>, IVec2Hash> chunkColumns;
-    std::mutex chunkColumnsMutex; // Mutex for thread-safe access to chunkColumns
+    ankerl::unordered_dense::map<glm::ivec2, std::shared_ptr<ChunkColumn>, IVec2Hash> chunkColumns; // acces only on main thread
+
+    // Multithreading
+    const int chunkToGeneratePerThread = 10;
+    const int terrainGenerationThreadsCount = 4;
+    bool terrainGenerationThreadsRunning = true;
+    void terrainGenerationWorkerThread();
+    std::vector<std::thread> terrainGenerationThreads;
+
+    // Multithreading synchronization
+    std::queue<ChunkToGenerate> chunksToGenerate;
+    std::mutex chunksToGenerateMutex;
 
     Block getBlockAt(const glm::ivec3& position) const override;
 
