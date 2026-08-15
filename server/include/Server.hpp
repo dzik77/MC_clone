@@ -23,6 +23,7 @@ inline bool operator==(const ENetAddress& lhs, const ENetAddress& rhs) {
 struct ChunkToGenerate {
     int x;
     int z;
+    bool send;
     ENetPeer* peer;
 };
 struct ChunkToSend {
@@ -57,6 +58,7 @@ class Server{
             }
         };
         ankerl::unordered_dense::map<ENetAddress, Player, ENetAdressHash> connectedClients;
+        ankerl::unordered_dense::set<ENetAddress, ENetAdressHash> newlyConnectedClients; // Set of newly connected clients to send initial data
 
         // Console input handling
 
@@ -67,7 +69,7 @@ class Server{
         void consoleInput();
 
         // World generation
-        int renderDistance = 32;
+        int renderDistance = 10;
         int renderDistanceServer = renderDistance + 1;
         std::vector<glm::ivec2> chunksToLoadOffset;
         void setRenderDistance(int distance);

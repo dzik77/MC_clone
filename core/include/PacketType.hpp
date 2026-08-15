@@ -22,7 +22,7 @@ struct ChunkPacket {
     int32_t x,y,z;
     Block chunkBlocks[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT * WorldConfig::CHUNK_SIZE];
 };
-struct RequestChunkPacket {
+struct RequestChunkPacket { // deprecated, not used anymore, but kept for reference
     const PacketType type = PacketType::RequestChunk;
     int32_t chunkColumnX;
     int32_t chunkColumnZ;

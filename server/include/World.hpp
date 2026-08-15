@@ -11,13 +11,20 @@
 #include <Chunk.hpp>
 #include <queue>
 #include <mutex>
+#include <hash.hpp>
 
 class World : public IWorldAccessor {
     public:
 
         World();
         ~World();
+
+        // terain generation
+        void generateTerrain(glm::ivec2 chunkColumnPosition);
         void getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnPacket);
+        void destroyChunkColumn(glm::ivec2 chunkColumnPosition);
+
+        // IWorldAccessor interface
         void updateBlock(glm::ivec3 position, Block block) override;
         
     private:
@@ -32,15 +39,8 @@ class World : public IWorldAccessor {
     TerrainSpline erosionSpline;
     TerrainSpline peaksAndValleysSpline;
     
-    // terain generation
-    void generateTerrain(glm::ivec2 chunkColumnPosition);
 
     // Chunk data
-    struct IVec2Hash {
-        std::size_t operator()(const glm::ivec2& k) const {
-            return std::hash<int>()(k.x) ^ (std::hash<int>()(k.y) << 1);
-        }
-    };
     ankerl::unordered_dense::map<glm::ivec2, std::unique_ptr<ChunkColumn>, IVec2Hash> chunkColumns;
     std::mutex chunkColumnsMutex; // Mutex for thread-safe access to chunkColumns
 

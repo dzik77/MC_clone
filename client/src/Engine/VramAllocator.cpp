@@ -78,7 +78,6 @@ void VramAllocator::clean(){
 }
 
 BufferAllocation VramAllocator::allocate(std::size_t vertexCount, std::size_t indexCount) {
-    std::lock_guard<std::mutex> lock(allocatorMutex);
     vertexCount += VERTEX_FAT_ALLOCATION;
     indexCount += INDEX_FAT_ALLOCATION;
     BufferAllocation allocation = {0, 0, vertexCount, indexCount};
@@ -121,7 +120,6 @@ BufferAllocation VramAllocator::allocate(std::size_t vertexCount, std::size_t in
 }
 
 void VramAllocator::free(const BufferAllocation &allocation) {
-    std::lock_guard<std::mutex> lock(allocatorMutex);
 
     VramBlock vertexBlock = {allocation.vertexBlocks, allocation.vertexCount};
     auto rightVertexBlockOffsetIt = freeVertexBlocksOffset.upper_bound({vertexBlock.offset, 0});

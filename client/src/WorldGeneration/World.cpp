@@ -106,14 +106,6 @@ void World::generateTerrain(ChunkColumn &chunkColumn) {
 
     //std::cout << "Requesting chunk column at position: (" << chunkColumn.position.x << ", " << chunkColumn.position.y << ")" << std::endl;
 
-    // request chunk from server
-    RequestChunkPacket requestPacket;
-    requestPacket.chunkColumnX = chunkColumn.position.x;
-    requestPacket.chunkColumnZ = chunkColumn.position.y;
-    ENetPacket *packet = enet_packet_create(&requestPacket, sizeof(RequestChunkPacket), ENET_PACKET_FLAG_RELIABLE);
-    assert(serverPeer != nullptr);
-    enet_peer_send(serverPeer, 0, packet);
-
     // for now just wait for the chunk to be received
     /*
     ENetEvent event;
@@ -423,7 +415,7 @@ void World::loadChunks(glm::vec3 playerPosition) {
         auto pos = it->first;
         int x = pos.x;
         int z = pos.y;
-        if ((x - chunkPosition.x) * (x - chunkPosition.x) + (z - chunkPosition.y) * (z - chunkPosition.y) > renderDistance * renderDistance) {
+        if ((x - chunkPosition.x) * (x - chunkPosition.x) + (z - chunkPosition.y) * (z - chunkPosition.y) > renderDistance * renderDistance && it->second.use_count() == 1) {
             for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
                 freeChunkPositionIndices.push(it->second->chunks[j].ssboIndex);
             }

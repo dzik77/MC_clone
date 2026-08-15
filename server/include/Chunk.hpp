@@ -16,4 +16,5 @@ struct ChunkColumn{
     }
     ChunkColumnState state = ChunkColumnState::UNLOADED;
     Block blocks[WorldConfig::CHUNK_SIZE][WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE];
+    int playersLoadedChunkColumn = 0; // Number of players that have loaded this chunk column
 };

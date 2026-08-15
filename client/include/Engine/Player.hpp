@@ -81,8 +81,8 @@ class Player : Entity {
             WorldUp = glm::vec3(0.0f,1.0f,0.0f);
 
         float 
-            MovementSpeed = 4.317f, // orig 4.317f
-            JumpSpeed = 8.4f, // orig 8.4f
+            MovementSpeed = 100.317f, // orig 4.317f
+            JumpSpeed = 30.4f, // orig 8.4f
             MouseSensivity = 0.1f,
             Yaw = -90.0f,
             Pitch = 0.0f;

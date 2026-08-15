@@ -125,6 +125,11 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition) {
 
 }
 
+void World::destroyChunkColumn(glm::ivec2 chunkColumnPosition) {
+    std::lock_guard<std::mutex> lock(chunkColumnsMutex);
+    chunkColumns.erase(chunkColumnPosition);
+}
+
 Block World::getBlockAt(const glm::ivec3 &position) const {
 
     int chunkColumnX = std::floor(static_cast<float>(position.x) / WorldConfig::CHUNK_SIZE);

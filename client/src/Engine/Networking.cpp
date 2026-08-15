@@ -37,6 +37,7 @@ void Networking::sendPlayerMovePacket(SavedClientState state) {
 
 }
 
+
 void Networking::sendPlaceBlockPacket(glm::ivec3 position, Block block) {
 
     PlaceBlockPacket packet;

@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <DBG.hpp>
 
 Server::Server() {
     if (enet_initialize() != 0) {
@@ -12,6 +13,8 @@ Server::Server() {
     if (server == nullptr) {
         throw std::runtime_error("Failed to create ENet server host");
     }
+
+    setRenderDistance(renderDistance); // Initialize chunksToLoadOffset based on the render distance
 
     std::cout << "Server initialized and listening on port " << address.port << std::endl;
 
@@ -75,7 +78,8 @@ void Server::run() {
                                 << event.peer->address.host << ":" << event.peer->address.port
                                 << std::endl;
                     glm::vec3 initialPosition(0.0f, 80.0f, 0.0f);
-                    connectedClients[event.peer->address] = {event.peer, initialPosition, glm::ivec2(0, 0), {}, 0};
+                    connectedClients[event.peer->address] = {event.peer, initialPosition, glm::ivec2(0, 0), {}, {}, 0};
+                    newlyConnectedClients.insert(event.peer->address); // Mark the client as newly connected
                     event.peer->data = (void*)"Player 1";
 
                     //sent PlayerInitialPositionPacket to the client
@@ -94,36 +98,74 @@ void Server::run() {
             }
         }
 
-        // requesting chunks for player implement later
-        /*
+        // update chunks for players
         for (auto& [address, player] : connectedClients) {
-            
+            //std::cout << "Player at position: (" << player.position.x << ", " << player.position.y << ", " << player.position.z << ")" << std::endl;
             glm::ivec2 currentChunkColumnPos = {static_cast<int>(std::floor(player.position.x / WorldConfig::CHUNK_SIZE)),
                                       static_cast<int>(std::floor(player.position.z / WorldConfig::CHUNK_SIZE))};
             
             // check if player has moved to a new chunk column
-            if (currentChunkColumnPos != player.previousChunkColumnPosition) {
+            bool isNewlyConnected = newlyConnectedClients.find(address) != newlyConnectedClients.end();
+            if (isNewlyConnected) {
+                newlyConnectedClients.erase(address); // Remove from newly connected set
+            }
+            if (currentChunkColumnPos != player.previousChunkColumnPosition || isNewlyConnected || 1) {
+
+                //std::cout << "UPDATING CHUNKS FOR PLAYER AT POSITION: (" << player.position.x << ", " << player.position.y << ", " << player.position.z << ")" << std::endl;
+
                 // check if the player has already been sent the chunk column
-                for (auto& chunkColumnSent : player.sentChunkColumns) {
-                    if ((chunkColumnSent.x - currentChunkColumnPos.x) * (chunkColumnSent.x - currentChunkColumnPos.x) + 
-                        (chunkColumnSent.y - currentChunkColumnPos.y) * (chunkColumnSent.y - currentChunkColumnPos.y) > renderDistanceServer * renderDistanceServer) {
-                        player.sentChunkColumns.erase(chunkColumnSent);
-                    }
-                }
                 for (auto& offset : chunksToLoadOffset) {
                     glm::ivec2 chunkColumnToLoad = currentChunkColumnPos + offset;
-                    if (player.sentChunkColumns.find(chunkColumnToLoad) == player.sentChunkColumns.end()) {
-                        // send request for chunk column to the client
-                        RequestChunkPacket requestChunkPacket;
-                        requestChunkPacket.chunkColumnX = chunkColumnToLoad.x;
-                        requestChunkPacket.chunkColumnZ = chunkColumnToLoad.y;
-                        //Load the chunk column from the world
+                    bool sendChunk = (currentChunkColumnPos.x - chunkColumnToLoad.x) * (currentChunkColumnPos.x - chunkColumnToLoad.x) + 
+                                     (currentChunkColumnPos.y - chunkColumnToLoad.y) * (currentChunkColumnPos.y - chunkColumnToLoad.y) <= renderDistance * renderDistance;
+                    if (sendChunk){
+                        
+                        if (player.sentAndLoadedChunkColumns.find(chunkColumnToLoad) == player.sentAndLoadedChunkColumns.end()) {
+
+                            // logic for sending and loading the chunk column
+                            ChunkToGenerate chunkToGenerate;
+                            chunkToGenerate.x = chunkColumnToLoad.x;
+                            chunkToGenerate.z = chunkColumnToLoad.y;
+                            chunkToGenerate.send = true;
+                            chunkToGenerate.peer = player.peer;
+                            {
+                                std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
+                                chunksToGenerate.push(chunkToGenerate);
+                            }
+
+                            player.sentAndLoadedChunkColumns.insert(chunkColumnToLoad);
+                        }
+
+                    } else { // just load
+
+                        if (player.sentAndLoadedChunkColumns.find(chunkColumnToLoad) != player.sentAndLoadedChunkColumns.end()) { // sent and loaded --> loaded
+                            player.sentAndLoadedChunkColumns.erase(chunkColumnToLoad);
+                            player.loadedChunkColumns.insert(chunkColumnToLoad);
+                        } else if (player.loadedChunkColumns.find(chunkColumnToLoad) == player.loadedChunkColumns.end()) { // not sent and not loaded --> loaded
+
+                            // logic for loading the chunk column
+                            ChunkToGenerate chunkToGenerate;
+                            chunkToGenerate.x = chunkColumnToLoad.x;
+                            chunkToGenerate.z = chunkColumnToLoad.y;
+                            chunkToGenerate.send = false;
+                            chunkToGenerate.peer = player.peer;
+                            {
+                                std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
+                                chunksToGenerate.push(chunkToGenerate);
+                            }
+
+                            player.loadedChunkColumns.insert(chunkColumnToLoad);
+                        }
+
                     }
                 }
+
+                chunksToGenerateCV.notify_one();
+
             }
 
         }
-        */
+        
         // Chunk sending
         {
             std::lock_guard<std::mutex> lock(chunksToSendMutex);
@@ -180,7 +222,7 @@ void Server::handlePacket(ENetEvent& event) {
     
     PacketType packetType = static_cast<PacketType>(event.packet->data[0]);
     switch(packetType) {
-        // /* archaic not used anymore, but kept for reference
+        /* archaic not used anymore, but kept for reference
         case PacketType::RequestChunk: {
             
             RequestChunkPacket* requestChunkPacket = reinterpret_cast<RequestChunkPacket*>(event.packet->data);
@@ -201,7 +243,7 @@ void Server::handlePacket(ENetEvent& event) {
             
             break;
         }
-        
+        */
         case PacketType::PlayerMove: {
 
             PlayerMovePacket* playerMovePacket = reinterpret_cast<PlayerMovePacket*>(event.packet->data);
@@ -336,7 +378,9 @@ void Server::generateChunks(int threadId) {
             std::lock_guard<std::mutex> lock(chunksToSendMutex);
             for (int i = 0; i < chunksToGenerateCount; i++) {
                 for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
-                    chunksToSend.push({chunkPackets[i][j], chunkToGenerate[i].peer});
+                    if (chunkToGenerate[i].send) {
+                        chunksToSend.push({chunkPackets[i][j], chunkToGenerate[i].peer});
+                    }
                 }
             }
             chunksGenerated += WorldConfig::CHUNK_COLUMN_HEIGHT * chunksToGenerateCount;
