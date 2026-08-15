@@ -152,6 +152,7 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
 
     ChunkToSend chunkToSend;
     auto& chunkColumn = chunkToSend.chunkPacket;
+    chunkColumn.position = chunkColumnPosition;
     chunkToSend.upload = true;
     chunkToSend.peer = peer;
 

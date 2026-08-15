@@ -165,9 +165,13 @@ void Server::run() {
                 if (chunkToSend.upload) {
                     world.uploadChunkColumn(chunkToSend.chunkPacket);
                 }
-                ENetPacket* packet = enet_packet_create(world.chunkColumnToPacket(chunkToSend.chunkPacket), sizeof(ChunkPacket), ENET_PACKET_FLAG_RELIABLE);
-                enet_peer_send(chunkToSend.peer, 0, packet);
-                std::osyncstream(std::cout) << "Sent chunk at position: (" << chunkToSend.chunkPacket.position.x << ", " << chunkToSend.chunkPacket.position.y << ") to client." << std::endl;
+                ChunkPacket* chunkColumnPackets = world.chunkColumnToPacket(chunkToSend.chunkPacket);
+                for (int y = 0; y < WorldConfig::CHUNK_COLUMN_HEIGHT; y++) {
+                    ENetPacket* packet = enet_packet_create(&chunkColumnPackets[y], sizeof(ChunkPacket), ENET_PACKET_FLAG_RELIABLE);
+                    enet_peer_send(chunkToSend.peer, 0, packet);
+                }
+                delete[] chunkColumnPackets;
+                //std::osyncstream(std::cout) << "Sent chunk at position: (" << chunkToSend.chunkPacket.position.x << ", " << chunkToSend.chunkPacket.position.y << ") to client." << std::endl;
                 world.chunksToSend.pop();
             }
         }
