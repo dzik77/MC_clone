@@ -107,23 +107,7 @@ void Server::run() {
             if (isNewlyConnected) {
                 newlyConnectedClients.erase(address); // Remove from newly connected set
             }
-            if (currentChunkColumnPos != player.previousChunkColumnPosition || isNewlyConnected || 1) {
-
-                // unloading chunks based on render distance
-                for (auto chunkColumnPos : player.sentAndLoadedChunkColumns) {
-                    if ((currentChunkColumnPos.x - chunkColumnPos.x) * (currentChunkColumnPos.x - chunkColumnPos.x) +
-                        (currentChunkColumnPos.y - chunkColumnPos.y) * (currentChunkColumnPos.y - chunkColumnPos.y) > renderDistance * renderDistance) {
-                        chunkColumnsToUnload.push_back(chunkColumnPos);
-                        player.sentAndLoadedChunkColumns.erase(chunkColumnPos);
-                    }
-                }
-                for (auto chunkColumnPos : player.loadedChunkColumns) {
-                    if ((currentChunkColumnPos.x - chunkColumnPos.x) * (currentChunkColumnPos.x - chunkColumnPos.x) +
-                        (currentChunkColumnPos.y - chunkColumnPos.y) * (currentChunkColumnPos.y - chunkColumnPos.y) > simulationRenderDistance * simulationRenderDistance) {
-                        chunkColumnsToUnload.push_back(chunkColumnPos);
-                        player.loadedChunkColumns.erase(chunkColumnPos);
-                    }
-                }
+            if (currentChunkColumnPos != player.previousChunkColumnPosition || isNewlyConnected) {
 
                 // loading chunks based on render distance
                 for (auto& offset : chunksToLoadOffset) {
@@ -132,10 +116,13 @@ void Server::run() {
                                      (currentChunkColumnPos.y - chunkColumnToLoad.y) * (currentChunkColumnPos.y - chunkColumnToLoad.y) <= renderDistance * renderDistance;
                     if (sendChunk){
                         
-                        if (player.sentAndLoadedChunkColumns.find(chunkColumnToLoad) == player.sentAndLoadedChunkColumns.end()) {
-
+                        if (player.loadedChunkColumns.find(chunkColumnToLoad) != player.loadedChunkColumns.end()) { // loaded --> sent and loaded
+                            player.loadedChunkColumns.erase(chunkColumnToLoad);
+                            player.sentAndLoadedChunkColumns.insert(chunkColumnToLoad);
                             world.sentAndLoadChunkColumn(chunkColumnToLoad, player.peer);
-
+                        } else if (player.sentAndLoadedChunkColumns.find(chunkColumnToLoad) == player.sentAndLoadedChunkColumns.end()) { // not sent and not loaded --> sent and loaded
+                            world.playerLoadedChunkColumn(chunkColumnToLoad);
+                            world.sentAndLoadChunkColumn(chunkColumnToLoad, player.peer);
                         }
 
                     } else { // just load
@@ -144,28 +131,56 @@ void Server::run() {
                             player.sentAndLoadedChunkColumns.erase(chunkColumnToLoad);
                             player.loadedChunkColumns.insert(chunkColumnToLoad);
                         } else if (player.loadedChunkColumns.find(chunkColumnToLoad) == player.loadedChunkColumns.end()) { // not sent and not loaded --> loaded
-
+                            world.playerLoadedChunkColumn(chunkColumnToLoad);
                             world.loadChunkColumn(chunkColumnToLoad, player.peer);
-
                         }
 
                     }
                 }
+
+                // unloading chunks based on render distance
+                // iterate back-to-front and erase by iterator: unordered_dense erases via swap-and-pop,
+                // which invalidates end() and can skip elements under forward iteration + erase
+                for (auto idx = player.sentAndLoadedChunkColumns.size(); idx > 0;) {
+                    --idx;
+                    auto it = player.sentAndLoadedChunkColumns.begin() + static_cast<std::ptrdiff_t>(idx);
+                    glm::ivec2 chunkColumnPos = *it;
+                    if ((currentChunkColumnPos.x - chunkColumnPos.x) * (currentChunkColumnPos.x - chunkColumnPos.x) +
+                        (currentChunkColumnPos.y - chunkColumnPos.y) * (currentChunkColumnPos.y - chunkColumnPos.y) > renderDistance * renderDistance) {
+                        chunkColumnsToUnload.push_back(chunkColumnPos);
+                        player.sentAndLoadedChunkColumns.erase(it);
+                    }
+                }
+                for (auto idx = player.loadedChunkColumns.size(); idx > 0;) {
+                    --idx;
+                    auto it = player.loadedChunkColumns.begin() + static_cast<std::ptrdiff_t>(idx);
+                    glm::ivec2 chunkColumnPos = *it;
+                    if ((currentChunkColumnPos.x - chunkColumnPos.x) * (currentChunkColumnPos.x - chunkColumnPos.x) +
+                        (currentChunkColumnPos.y - chunkColumnPos.y) * (currentChunkColumnPos.y - chunkColumnPos.y) > simulationRenderDistance * simulationRenderDistance) {
+                        chunkColumnsToUnload.push_back(chunkColumnPos);
+                        player.loadedChunkColumns.erase(it);
+                    }
+                }
+
             }
         }
 
         world.unloadChunkColumns(chunkColumnsToUnload);
-        //world.loadedChunkColumn();
+        world.loadedChunkColumn();
 
         // Chunk sending
         {
             std::lock_guard<std::mutex> lock(world.chunksToSendMutex);
             while (!world.chunksToSend.empty()) {
                 ChunkToSend& chunkToSend = world.chunksToSend.front();
-                if (chunkToSend.upload) {
-                    world.uploadChunkColumn(chunkToSend.chunkPacket);
+                if (world.playersLoadedChunkColumn(chunkToSend.chunkPacket->position) <= 0) {
+                    world.chunksToSend.pop();
+                    continue; // Skip sending this chunk if no players have it loaded
                 }
-                ChunkPacket* chunkColumnPackets = world.chunkColumnToPacket(chunkToSend.chunkPacket);
+                if (chunkToSend.upload) {
+                    world.uploadChunk(chunkToSend.chunkPacket);
+                }
+                ChunkPacket* chunkColumnPackets = world.chunkColumnToPacket(*chunkToSend.chunkPacket);
                 for (int y = 0; y < WorldConfig::CHUNK_COLUMN_HEIGHT; y++) {
                     ENetPacket* packet = enet_packet_create(&chunkColumnPackets[y], sizeof(ChunkPacket), ENET_PACKET_FLAG_RELIABLE);
                     enet_peer_send(chunkToSend.peer, 0, packet);

@@ -23,13 +23,22 @@ class World : public IWorldAccessor {
         ~World();
 
         // terain generation
+        void playerLoadedChunkColumn(glm::ivec2 chunkColumnPosition){
+            chunkColumnPlayersLoadedCount[chunkColumnPosition]++;
+        }
+        int playersLoadedChunkColumn(glm::ivec2 chunkColumnPosition){
+            if (chunkColumnPlayersLoadedCount.find(chunkColumnPosition) != chunkColumnPlayersLoadedCount.end()){
+                return chunkColumnPlayersLoadedCount[chunkColumnPosition];
+            } else {
+                return 0;
+            }
+        }
         void loadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
         void sentAndLoadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
         void generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
         ChunkPacket* chunkColumnToPacket(ChunkColumn& chunkColumn);
-        void uploadChunkColumn(ChunkColumn chunkColumn){
-            std::shared_ptr<ChunkColumn> chunkColumnPtr = std::make_shared<ChunkColumn>(chunkColumn);
-            chunkColumns[chunkColumn.position] = chunkColumnPtr;
+        void uploadChunk(std::shared_ptr<ChunkColumn> chunkColumn){
+            chunkColumns[chunkColumn->position] = std::move(chunkColumn);
         }
 
         void unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload);
@@ -78,7 +87,8 @@ class World : public IWorldAccessor {
     
 
     // Chunk data
-    ankerl::unordered_dense::map<glm::ivec2, std::shared_ptr<ChunkColumn>, IVec2Hash> chunkColumns; // acces only on main thread
+    ankerl::unordered_dense::map<glm::ivec2, std::shared_ptr<ChunkColumn>, IVec2Hash> chunkColumns; // access only on main thread
+    ankerl::unordered_dense::map<glm::ivec2, int, IVec2Hash> chunkColumnPlayersLoadedCount; // access only on main thread
 
     // Multithreading
     const int chunkToGeneratePerThread = 10;

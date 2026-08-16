@@ -3,6 +3,7 @@
 #include <WorldConfig.hpp>
 #include <cstring>
 #include <enet/enet.h>
+#include <memory>
 
 enum class ChunkColumnState : uint8_t {
     UNLOADED ,
@@ -18,7 +19,6 @@ struct ChunkColumn{
     ChunkColumnState state = ChunkColumnState::UNLOADED;
     Block blocks[WorldConfig::CHUNK_SIZE][WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT][WorldConfig::CHUNK_SIZE];
     glm::ivec2 position;
-    int playersLoadedChunkColumn = 0; // Number of players that have loaded this chunk column
 };
 struct ChunkToGenerate {
     int x;
@@ -27,7 +27,7 @@ struct ChunkToGenerate {
     ENetPeer* peer;
 };
 struct ChunkToSend {
-    ChunkColumn chunkPacket;
+    std::shared_ptr<ChunkColumn> chunkPacket;
     bool upload = false;
     ENetPeer* peer;
 };

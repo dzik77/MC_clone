@@ -151,7 +151,8 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
     peaksAndValleysFractal->GenUniformGrid2D(peaksAndValleysBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
 
     ChunkToSend chunkToSend;
-    auto& chunkColumn = chunkToSend.chunkPacket;
+    chunkToSend.chunkPacket = std::make_shared<ChunkColumn>();
+    auto& chunkColumn = *chunkToSend.chunkPacket;
     chunkColumn.position = chunkColumnPosition;
     chunkToSend.upload = true;
     chunkToSend.peer = peer;
@@ -187,22 +188,13 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
 
 void World::unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload) {
 
-    std::vector<glm::ivec2> potentialChunkColumnsToUnload;
-
     for (auto& chunkColumnPos : chunkColumnsToUnload) {
-        auto it = chunkColumns.find(chunkColumnPos);
-        if (it != chunkColumns.end()) {
-            it->second->playersLoadedChunkColumn--;
-            if (it->second->playersLoadedChunkColumn <= 0) {
-                potentialChunkColumnsToUnload.push_back(chunkColumnPos);
+        chunkColumnPlayersLoadedCount[chunkColumnPos]--;
+        if (chunkColumnPlayersLoadedCount[chunkColumnPos] <= 0) {
+            chunkColumnPlayersLoadedCount.erase(chunkColumnPos);
+            if (chunkColumns.find(chunkColumnPos) != chunkColumns.end()) {
+                chunkColumns.erase(chunkColumnPos);
             }
-        }
-    }
-
-    for (auto& chunkColumnPos : potentialChunkColumnsToUnload) {
-        // must exists to be pushed to stack
-        if (chunkColumns[chunkColumnPos]->playersLoadedChunkColumn <= 0) {
-            chunkColumns.erase(chunkColumnPos);
         }
     }
 
