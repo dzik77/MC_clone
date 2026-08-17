@@ -44,7 +44,16 @@ class World : public IWorldAccessor {
         void unloadChunkColumns(std::vector<glm::ivec2> &chunkColumnsToUnload);
 
         void loadedChunkColumn(){
-            std::cout << "Loaded chunk columns: " << chunkColumns.size() << std::endl;
+            static int lastSize = 0;
+            if (chunkColumns.size() != lastSize){
+                lastSize = chunkColumns.size();
+                std::cout << "Loaded chunk columns: " << chunkColumns.size() << std::endl;
+            }
+            static int lastSizePlayers = 0;
+            if (chunkColumnPlayersLoadedCount.size() != lastSizePlayers){
+                lastSizePlayers = chunkColumnPlayersLoadedCount.size();
+                std::cout << "Players loaded chunk columns: " << chunkColumnPlayersLoadedCount.size() << std::endl;
+            }
         }
         
         // IWorldAccessor interface

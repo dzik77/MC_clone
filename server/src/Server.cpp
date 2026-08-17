@@ -121,6 +121,7 @@ void Server::run() {
                             player.sentAndLoadedChunkColumns.insert(chunkColumnToLoad);
                             world.sentAndLoadChunkColumn(chunkColumnToLoad, player.peer);
                         } else if (player.sentAndLoadedChunkColumns.find(chunkColumnToLoad) == player.sentAndLoadedChunkColumns.end()) { // not sent and not loaded --> sent and loaded
+                            player.sentAndLoadedChunkColumns.insert(chunkColumnToLoad);
                             world.playerLoadedChunkColumn(chunkColumnToLoad);
                             world.sentAndLoadChunkColumn(chunkColumnToLoad, player.peer);
                         }
@@ -130,7 +131,8 @@ void Server::run() {
                         if (player.sentAndLoadedChunkColumns.find(chunkColumnToLoad) != player.sentAndLoadedChunkColumns.end()) { // sent and loaded --> loaded
                             player.sentAndLoadedChunkColumns.erase(chunkColumnToLoad);
                             player.loadedChunkColumns.insert(chunkColumnToLoad);
-                        } else if (player.loadedChunkColumns.find(chunkColumnToLoad) == player.loadedChunkColumns.end()) { // not sent and not loaded --> loaded
+                        } else if (player.loadedChunkColumns.find(chunkColumnToLoad) == player.loadedChunkColumns.end()) { // not loaded --> loaded
+                            player.loadedChunkColumns.insert(chunkColumnToLoad);
                             world.playerLoadedChunkColumn(chunkColumnToLoad);
                             world.loadChunkColumn(chunkColumnToLoad, player.peer);
                         }

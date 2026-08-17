@@ -96,7 +96,7 @@ void World::loadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
     chunkToGenerate.z = chunkColumnPosition.y;
     chunkToGenerate.send = false;
     chunkToGenerate.peer = peer;
-    {
+    if (chunkColumns.find(chunkColumnPosition) == chunkColumns.end()) {
         std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
         chunksToGenerate.push(chunkToGenerate);
         chunksToGenerateCV.notify_one();
@@ -111,10 +111,18 @@ void World::sentAndLoadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* pee
     chunkToGenerate.z = chunkColumnPosition.y;
     chunkToGenerate.send = true;
     chunkToGenerate.peer = peer;
-    {
+    if (chunkColumns.find(chunkColumnPosition) == chunkColumns.end()) {
         std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
         chunksToGenerate.push(chunkToGenerate);
         chunksToGenerateCV.notify_one();
+    } else {
+        // If the chunk column already exists, we still need to send it to the player
+        ChunkToSend chunkToSend;
+        chunkToSend.chunkPacket = chunkColumns[chunkColumnPosition];
+        chunkToSend.upload = false;
+        chunkToSend.peer = peer;
+        std::lock_guard<std::mutex> lock(chunksToSendMutex);
+        chunksToSend.push(chunkToSend);
     }
 
 }
