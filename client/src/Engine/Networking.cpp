@@ -1,5 +1,7 @@
 #include <Engine/Networking.hpp>
 #include <Engine/Player.hpp>
+#include <WorldGeneration/World.hpp>
+#include <ChunkCompression.hpp>
 
 Networking::Networking() : client(nullptr), serverPeer(nullptr), receivedChunks(nullptr), player(nullptr), worldAccessor(nullptr) {}
 
@@ -9,7 +11,7 @@ Networking::~Networking() {
     }
 }
 
-void Networking::initialize(std::queue<ChunkPacket> &receivedChunks, Player &player, IWorldAccessor &worldAccessor) {
+void Networking::initialize(std::queue<ChunkPacket> &receivedChunks, Player &player, World &worldAccessor) {
     this->receivedChunks = &receivedChunks;
     this->player = &player;
     this->worldAccessor = &worldAccessor;
@@ -119,11 +121,19 @@ void Networking::handleEvents(ENetEvent& event) {
     PacketType packetType = static_cast<PacketType>(event.packet->data[0]);
     switch(packetType) {
         case PacketType::Chunk: {
-            if (event.packet->dataLength == sizeof(ChunkPacket)) {
-                receivedChunks->push(*reinterpret_cast<ChunkPacket*>(event.packet->data));
-            } else {
+            if (event.packet->dataLength < sizeof(ChunkPacketHeader) + 1) {
                 std::cerr << "Warning: Invalid ChunkPacket length: " << event.packet->dataLength << std::endl;
+                break;
             }
+            ChunkPacketHeader* header = reinterpret_cast<ChunkPacketHeader*>(event.packet->data);
+            ChunkPacket chunkPacket;
+            chunkPacket.x = header->x;
+            chunkPacket.y = header->y;
+            chunkPacket.z = header->z;
+            ChunkCompression::decodeChunk(event.packet->data + sizeof(ChunkPacketHeader),
+                                           event.packet->dataLength - sizeof(ChunkPacketHeader),
+                                           chunkPacket.chunkBlocks);
+            receivedChunks->push(chunkPacket);
             break;
         }
         case PacketType::ServerAuthoritativeState: {
@@ -143,15 +153,26 @@ void Networking::handleEvents(ENetEvent& event) {
 
             if (serverState->wasRejected){
 
-                player->setPosition(serverState->truePosition);
-                player->setRotation(lastYaw, lastPitch);
+                if (clientStateHistory.size() > MAX_CLIENT_STATE_HISTORY) {
+                    // Backlog is too large to replay without stalling the main thread (this happens
+                    // when acks get delayed, e.g. by a burst of chunk traffic while moving fast).
+                    // Snap to the server's authoritative position and drop the backlog instead of
+                    // replaying every buffered step synchronously. Rotation is left alone since it's
+                    // already kept live by the mouse callback, independent of this history.
+                    std::cerr << "Warning: dropping " << clientStateHistory.size() << " unacknowledged inputs after large desync." << std::endl;
+                    player->setPosition(serverState->truePosition);
+                    clientStateHistory.clear();
+                } else {
+                    player->setPosition(serverState->truePosition);
+                    player->setRotation(lastYaw, lastPitch);
 
-                for (auto& state : clientStateHistory) {
-                    player->setRotation(state.yaw, state.pitch);
-                    player->handleInput(state.input);
-                    player->MouseInput(state.xoffset, state.yoffset);
-                    player->updatePhysics(state.dt);
-                    state.predictedPosition = player->getPosition();
+                    for (auto& state : clientStateHistory) {
+                        player->setRotation(state.yaw, state.pitch);
+                        player->handleInput(state.input);
+                        player->MouseInput(state.xoffset, state.yoffset);
+                        player->updatePhysics(state.dt);
+                        state.predictedPosition = player->getPosition();
+                    }
                 }
 
             }
@@ -162,6 +183,17 @@ void Networking::handleEvents(ENetEvent& event) {
 
             BlockUpdatePacket* blockUpdatePacket = reinterpret_cast<BlockUpdatePacket*>(event.packet->data);
             worldAccessor->updateBlock(blockUpdatePacket->position, blockUpdatePacket->block);
+            break;
+
+        }
+        case PacketType::UnloadChunkColumn: {
+
+            if (event.packet->dataLength != sizeof(UnloadChunkColumnPacket)) {
+                std::cerr << "Warning: Invalid UnloadChunkColumnPacket length: " << event.packet->dataLength << std::endl;
+                break;
+            }
+            UnloadChunkColumnPacket* unloadPacket = reinterpret_cast<UnloadChunkColumnPacket*>(event.packet->data);
+            worldAccessor->unloadChunkColumn(glm::ivec2(unloadPacket->chunkColumnX, unloadPacket->chunkColumnZ));
             break;
 
         }

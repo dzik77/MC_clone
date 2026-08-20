@@ -9,6 +9,7 @@
 #include <IWorldAccesor.hpp>
 
 class Player;
+class World;
 #include <IWorldAccesor.hpp>
 
 struct SavedClientState {
@@ -26,7 +27,7 @@ class Networking {
 
         Networking();
         ~Networking();
-        void initialize(std::queue<ChunkPacket> &receivedChunks, Player &player, IWorldAccessor &worldAccessor);
+        void initialize(std::queue<ChunkPacket> &receivedChunks, Player &player, World &worldAccessor);
         void sendPlayerMovePacket(SavedClientState state);
         void sendPlaceBlockPacket(glm::ivec3 position, Block block);
         void sendDestroyBlockPacket(glm::ivec3 position);
@@ -48,8 +49,12 @@ class Networking {
 
         // client state
         Player* player;
-        IWorldAccessor* worldAccessor;
+        World* worldAccessor;
         int currentSequenceID = 1;
         std::deque<SavedClientState> clientStateHistory;
+        // If a rejection ever needs to replay more than this many buffered inputs (e.g. after a
+        // network stall backs up clientStateHistory), replaying them all synchronously would stall
+        // the main thread, so we snap to the server position and drop the backlog instead.
+        static constexpr size_t MAX_CLIENT_STATE_HISTORY = 60;
 
 };

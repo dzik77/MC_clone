@@ -38,8 +38,10 @@ class World : public IWorldAccessor {
         void generateMesh();
         void loadChunks(glm::vec3 playerPosition);
         void updateBlock(glm::ivec3 position, Block block) override;
+        void unloadChunkColumn(glm::ivec2 chunkColumnPos);
         void requestChunk(glm::ivec2 chunkColumnPos);
-        void render(Shader& shader, glm::vec3 playerPosition);
+        void renderOpaque(glm::vec3 playerPosition);
+        void renderTransparent(glm::vec3 playerPosition);
 #ifdef DEBUG
         void renderDebugWindow(glm::vec3 playerPosition);
 #endif
@@ -80,19 +82,24 @@ class World : public IWorldAccessor {
         unsigned int textureArray;
 
         // render distance
-        int renderDistance = 20;
+        int renderDistance = 32;
         std::vector<glm::ivec2> chunksToLoadOffset; // based on render distance, calculated in setRenderDistance
         
         // allocator
         VramAllocator vramAllocator;
         GLuint globalVAO;
         
-        // Chunks data proccesing        
+        // Chunks data proccesing
         glm::ivec2 lastPlayerChunkPosition = glm::ivec2(0, 0);
         ankerl::unordered_dense::map<glm::ivec2, std::shared_ptr<ChunkColumn>, IVec2Hash> chunkColumn;
         std::stack<int> freeChunkPositionIndices;
         std::stack<glm::ivec2> chunksToGenerateMesh;
         ankerl::unordered_dense::set<glm::ivec2, IVec2Hash> chunksGeneratedOnEdge;
+
+        // Chunk columns the server has told us to unload; processed opportunistically since a
+        // column can still be referenced by an in-flight mesh job (see processPendingUnloads)
+        std::vector<glm::ivec2> pendingChunkUnloads;
+        void processPendingUnloads();
         
         // Chunks waiting for mesh generation
         void regenerateMeshForChunk(glm::ivec3 position);
@@ -132,5 +139,10 @@ class World : public IWorldAccessor {
         GLuint indirectCommandBuffer;
         DrawElementsIndirectCommand* mappedIndirectCommands;
         size_t indirectCommandBufferSize;
+
+        // Double-buffering state shared between renderOpaque and renderTransparent
+        // (both must use the same buffer slot within a frame; advanced once per frame by renderOpaque)
+        int currentFrame = 0;
+        int currentBufferIndex = 0;
 
 };

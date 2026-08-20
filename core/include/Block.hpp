@@ -8,6 +8,8 @@ enum class Block: uint8_t {
     DIRT = 1,
     GRASS = 2,
     STONE = 3,
+    LOG = 4,
+    LEAVES = 5,
     WATER = 255
 };
 
@@ -35,6 +37,13 @@ inline int getTextureID(Block block, Direction direction){
             return 4;
         case Block::WATER:
             return 5;
+        case Block::LOG:
+            if (direction == Direction::UP || direction == Direction::DOWN)
+                return 6;
+            else
+                return 7;
+        case Block::LEAVES:
+            return 8;
     }
     return 0;
 }

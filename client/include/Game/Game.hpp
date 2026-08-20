@@ -16,6 +16,7 @@
 #include <Engine/Player.hpp>
 #include <Engine/FreeCamera.hpp>
 #include <Engine/TextureManager.hpp>
+#include <PhysicsEngine.hpp>
 
 // DEBUGGING
 
@@ -38,9 +39,11 @@ class Game{
         GLFWwindow* window;
         World world;
         glm::mat4 projection;
-        const std::filesystem::path vertexShaderPath{"Shaders/vertex.glsl"};
-        const std::filesystem::path fragmentShaderPath{"Shaders/fragment.glsl"};
-        Shader shader;
+        const std::filesystem::path vertexWorldShaderPath{"Shaders/vertexWorld.glsl"};
+        const std::filesystem::path fragmentWorldShaderPath{"Shaders/fragmentWorld.glsl"};
+        const std::filesystem::path vertexPlayerShaderPath{"Shaders/vertexPlayer.glsl"};
+        const std::filesystem::path fragmentPlayerShaderPath{"Shaders/fragmentPlayer.glsl"};
+        Shader shaderWorld, shaderPlayer;
 
         //Texture
         TextureArray textureArray;
@@ -50,7 +53,10 @@ class Game{
             "textures/grass_block_side.png",
             "textures/grass_block_top_item.png",
             "textures/stone.png",
-            "textures/water_still.png"
+            "textures/water_still.png",
+            "textures/log.png",
+            "textures/top_log.png",
+            "textures/leaves.png"
         };
 
         Networking networking;
@@ -59,6 +65,17 @@ class Game{
         Player player;
         FreeCamera freeCamera;
         bool freeCameraMode = false;
+
+        // Camera view modes (F5)
+        enum class ViewMode { FirstPerson, ThirdPersonBack, ThirdPersonFront };
+        ViewMode viewMode = ViewMode::FirstPerson;
+        bool wasF5Pressed = false;
+
+        static constexpr float THIRD_PERSON_DISTANCE = 4.0f;
+        static constexpr float THIRD_PERSON_COLLISION_MARGIN = 0.2f;
+        static constexpr float THIRD_PERSON_MIN_DISTANCE = 0.1f;
+
+        glm::mat4 getActiveView();
 
         //physics
         bool physics = true;

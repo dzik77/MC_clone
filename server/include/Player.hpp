@@ -8,6 +8,6 @@ struct Player {
     ENetPeer* peer;
     glm::vec3 position;
     glm::ivec2 previousChunkColumnPosition;
-    ankerl::unordered_dense::set<glm::ivec2, IVec2Hash> sentAndLoadedChunkColumns, loadedChunkColumns; // Set of chunk columns that have been sent and loaded by the player
+    ankerl::unordered_dense::set<glm::ivec2, IVec2Hash> loadedChunkColumns; // Set of chunk columns that have been sent and loaded by the player
     int lastProcessedInputSequenceID;
 };

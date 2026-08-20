@@ -21,6 +21,9 @@ World::World() {
     peaksAndValleysFractal->SetSource(peaksAndValleys);
     peaksAndValleysFractal->SetOctaveCount(3);
 
+    vegetation = FastNoise::New<FastNoise::Simplex>();
+    vegetation->SetScale(1000.f);
+
     // ---------------------------------------------------------
     // 1. Continentalness (Base Heights)
     // ---------------------------------------------------------
@@ -89,27 +92,11 @@ void World::getTerrain(glm::ivec2 chunkColumnPosition, ChunkPacket* chunkColumnP
 }
 */
 
-void World::loadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
-
-    ChunkToGenerate chunkToGenerate;
-    chunkToGenerate.x = chunkColumnPosition.x;
-    chunkToGenerate.z = chunkColumnPosition.y;
-    chunkToGenerate.send = false;
-    chunkToGenerate.peer = peer;
-    if (chunkColumns.find(chunkColumnPosition) == chunkColumns.end()) {
-        std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
-        chunksToGenerate.push(chunkToGenerate);
-        chunksToGenerateCV.notify_one();
-    }
-
-}
-
 void World::sentAndLoadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
 
     ChunkToGenerate chunkToGenerate;
     chunkToGenerate.x = chunkColumnPosition.x;
     chunkToGenerate.z = chunkColumnPosition.y;
-    chunkToGenerate.send = true;
     chunkToGenerate.peer = peer;
     if (chunkColumns.find(chunkColumnPosition) == chunkColumns.end()) {
         std::lock_guard<std::mutex> lock(chunksToGenerateMutex);
@@ -127,37 +114,41 @@ void World::sentAndLoadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* pee
 
 }
 
-ChunkPacket* World::chunkColumnToPacket(ChunkColumn& chunkColumn){
-    ChunkPacket* chunkColumnPacket = new ChunkPacket[WorldConfig::CHUNK_COLUMN_HEIGHT];
+ChunkSendBuffer* World::chunkColumnToPacket(ChunkColumn& chunkColumn){
+    ChunkSendBuffer* buffers = new ChunkSendBuffer[WorldConfig::CHUNK_COLUMN_HEIGHT];
 
     for (int y = 0; y < WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
-        chunkColumnPacket[y].x = chunkColumn.position.x;
-        chunkColumnPacket[y].z = chunkColumn.position.y;
-        chunkColumnPacket[y].y = y;
-        std::memset(chunkColumnPacket[y].chunkBlocks, 0, sizeof(chunkColumnPacket[y].chunkBlocks));
-    }
-    
-    for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
-        for (int y = 0; y < WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT; y++){
-            int chunkY = y / WorldConfig::CHUNK_SIZE;
-            int localY = y % WorldConfig::CHUNK_SIZE;
-            for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
-                chunkColumnPacket[chunkY].chunkBlocks[x * WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE + localY * WorldConfig::CHUNK_SIZE + z] = chunkColumn.blocks[x][y][z];
-            }
-        }
+        ChunkPacketHeader header;
+        header.x = chunkColumn.position.x;
+        header.z = chunkColumn.position.y;
+        header.y = y;
+        std::memcpy(buffers[y].data, &header, sizeof(header));
+
+        size_t bodyLength = ChunkCompression::encodeChunk(chunkColumn.blocks, y, buffers[y].data + sizeof(header));
+        buffers[y].length = sizeof(header) + bodyLength;
     }
 
-    return chunkColumnPacket;
+    return buffers;
 }
 
 void World::generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
 
-    // Generate noise values for the chunk column (SIMD optimized)
-    std::vector<float> continentalnessBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), erosionBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), peaksAndValleysBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE), chunkBuffer(WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_SIZE);
-    continentalness->GenUniformGrid2D(continentalnessBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
-    erosionFractal->GenUniformGrid2D(erosionBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
-    peaksAndValleysFractal->GenUniformGrid2D(peaksAndValleysBuffer.data(), chunkColumnPosition.x * WorldConfig::CHUNK_SIZE, chunkColumnPosition.y * WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, WorldConfig::CHUNK_SIZE, 1.f, 1.f, seed);
+    // base terrain pass
 
+    // Noise is sampled over a (CHUNK_SIZE + 2*borderMargin) square centered on the column so a
+    // later decoration pass can read past the column's edge without needing neighboring columns.
+    constexpr int paddedSize = WorldConfig::CHUNK_SIZE + 2 * borderMargin;
+    int noiseOriginX = chunkColumnPosition.x * WorldConfig::CHUNK_SIZE - borderMargin;
+    int noiseOriginZ = chunkColumnPosition.y * WorldConfig::CHUNK_SIZE - borderMargin;
+
+    // Generate noise values for the chunk column (SIMD optimized)
+    std::vector<float> continentalnessBuffer(paddedSize * paddedSize), erosionBuffer(paddedSize * paddedSize), peaksAndValleysBuffer(paddedSize * paddedSize), vegetationBuffer(paddedSize * paddedSize);
+    continentalness->GenUniformGrid2D(continentalnessBuffer.data(), noiseOriginX, noiseOriginZ, paddedSize, paddedSize, 1.f, 1.f, seed);
+    erosionFractal->GenUniformGrid2D(erosionBuffer.data(), noiseOriginX, noiseOriginZ, paddedSize, paddedSize, 1.f, 1.f, seed);
+    peaksAndValleysFractal->GenUniformGrid2D(peaksAndValleysBuffer.data(), noiseOriginX, noiseOriginZ, paddedSize, paddedSize, 1.f, 1.f, seed);
+    vegetation->GenUniformGrid2D(vegetationBuffer.data(), noiseOriginX, noiseOriginZ, paddedSize, paddedSize, 1.f, 1.f, seed);
+
+    
     ChunkToSend chunkToSend;
     chunkToSend.chunkPacket = std::make_shared<ChunkColumn>();
     auto& chunkColumn = *chunkToSend.chunkPacket;
@@ -168,9 +159,10 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
     // Combine the noise values to determine the final height of each column in the chunk
     for (int x = 0; x < WorldConfig::CHUNK_SIZE; x++){
         for (int z = 0; z < WorldConfig::CHUNK_SIZE; z++){
-            float continentalnessValue = continentalnessSpline.evaluateHeight(continentalnessBuffer[z * WorldConfig::CHUNK_SIZE + x]);
-            float erosionValue = erosionSpline.evaluateHeight(erosionBuffer[z * WorldConfig::CHUNK_SIZE + x]);
-            float peaksAndValleysValue = peaksAndValleysSpline.evaluateHeight(peaksAndValleysBuffer[z * WorldConfig::CHUNK_SIZE + x]);
+            int bufferIndex = (z + borderMargin) * paddedSize + (x + borderMargin);
+            float continentalnessValue = continentalnessSpline.evaluateHeight(continentalnessBuffer[bufferIndex]);
+            float erosionValue = erosionSpline.evaluateHeight(erosionBuffer[bufferIndex]);
+            float peaksAndValleysValue = peaksAndValleysSpline.evaluateHeight(peaksAndValleysBuffer[bufferIndex]);
             //std::cout << normalizedNoise * maxHeight << " ";
             int height = continentalnessValue + (erosionValue * peaksAndValleysValue);
             height = std::clamp(height, 1, WorldConfig::MAX_HEIGHT - 1);
@@ -187,6 +179,73 @@ void World::generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer) {
         //std::cout << std::endl;
     }
 
+    // decoration pass 
+
+    auto setBlockIfAir = [&](int x, int y, int z, Block block) {
+        if (x < borderMargin || x >= paddedSize - borderMargin || z < borderMargin || z >= paddedSize - borderMargin || y < 0 || y >= WorldConfig::CHUNK_COLUMN_HEIGHT* WorldConfig::CHUNK_SIZE) return;
+        if (chunkColumn.blocks[x - borderMargin][y][z - borderMargin] == Block::AIR) {
+            chunkColumn.blocks[x - borderMargin][y][z - borderMargin] = block;
+        }
+    };
+
+    int startx = chunkColumnPosition.x * WorldConfig::CHUNK_SIZE - borderMargin;
+    int endx = (chunkColumnPosition.x+1) * WorldConfig::CHUNK_SIZE + borderMargin;
+    int startz = chunkColumnPosition.y * WorldConfig::CHUNK_SIZE - borderMargin;
+    int endz = (chunkColumnPosition.y+1) * WorldConfig::CHUNK_SIZE + borderMargin;
+    auto floorToMultiple = [](int v, int m) { return v - (((v % m) + m) % m); };
+    for (int x = floorToMultiple(startx, treeMargin); x < endx; x+= treeMargin){
+        for (int z = floorToMultiple(startz, treeMargin); z < endz; z+= treeMargin){
+
+            uint32_t hash = hashCell(x, z);
+            int hashX = hash & (0xFFFF);
+            int hashZ = (hash >> 16) & (0xFFFF);
+            int worldX = hashX % treeMargin + x;
+            int worldZ = hashZ % treeMargin + z;
+            if (worldX < startx || worldX >= endx || worldZ < startz || worldZ >= endz) continue;
+
+            int bufferIndex = ((worldZ - startz) * paddedSize) + (worldX - startx);
+            float vegetationValue = vegetationBuffer[bufferIndex];
+            //std::cout << normalizedNoise * maxHeight << " ";
+
+            float continentalnessValue = continentalnessSpline.evaluateHeight(continentalnessBuffer[bufferIndex]);
+            float erosionValue = erosionSpline.evaluateHeight(erosionBuffer[bufferIndex]);
+            float peaksAndValleysValue = peaksAndValleysSpline.evaluateHeight(peaksAndValleysBuffer[bufferIndex]);
+
+            int height = continentalnessValue + (erosionValue * peaksAndValleysValue);
+            height = std::clamp(height, 1, WorldConfig::MAX_HEIGHT - 1);
+
+            if (vegetationValue > 0.5f && height > waterLevel){
+
+                int localTreeX = worldX - startx;
+                int localTreeZ = worldZ - startz;
+
+                for (int y = height + 1; y <= height + 5; y++){
+                    setBlockIfAir(localTreeX, y, localTreeZ, Block::LOG);
+                }
+                for (int y = height + 3; y <= height + 4; y++){
+                    for (int dx = -2; dx <= 2; dx++){
+                        for (int dz = -2; dz <= 2; dz++){
+                            if (dx*dx+dz*dz <= 4){
+                                setBlockIfAir(localTreeX + dx, y, localTreeZ + dz, Block::LEAVES);
+                            }
+                        }
+                    }
+                }
+                for (int dx = -1; dx <= 1; dx++){
+                    for (int dz = -1; dz <= 1; dz++){
+                        if (dx*dx+dz*dz <= 1){
+                            setBlockIfAir(localTreeX + dx, height + 5, localTreeZ + dz, Block::LEAVES);
+                        }
+                    }
+                }
+                setBlockIfAir(localTreeX, height + 6, localTreeZ, Block::LEAVES);
+               
+
+            }
+        }
+    }
+
+    // sending
     {
         std::lock_guard<std::mutex> lock(chunksToSendMutex);
         chunksToSend.push(chunkToSend);

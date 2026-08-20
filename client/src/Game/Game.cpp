@@ -91,7 +91,8 @@ Game::Game() {
 
     // shaders
     std::cout << "Loading shaders..." << std::endl;
-    shader.initialize(vertexShaderPath, fragmentShaderPath);
+    shaderWorld.initialize(vertexWorldShaderPath, fragmentWorldShaderPath);
+    shaderPlayer.initialize(vertexPlayerShaderPath, fragmentPlayerShaderPath);
     std::cout << "Shaders loaded." << std::endl;
 
     // textures
@@ -134,10 +135,10 @@ void Game::run() {
     std::cout << "Connected to server!" << std::endl;
     world.setServerPeer(networking.getServerPeer());
 
-    shader.use();
-    shader.setInt("textureArray", 0);
+    shaderWorld.use();
+    shaderWorld.setInt("textureArray", 0);
     projection = glm::perspective(glm::radians(90.0f), 800.f / 600.f, 0.1f, 1000.f);
-    shader.setMat4("model", glm::mat4(1.f));
+    shaderWorld.setMat4("model", glm::mat4(1.f));
 
     float lastFrame, currentFrame, deltaTime;
     lastFrame = glfwGetTime();
@@ -179,14 +180,26 @@ void Game::run() {
         glClearColor(0.2f,0.3f,0.3f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader.setMat4("projection", projection);
-        shader.setMat4("view", (!freeCameraMode ? player.camera.getView() : freeCamera.getView()));
+        shaderWorld.use();
+        shaderWorld.setMat4("projection", projection);
+        shaderWorld.setMat4("view", getActiveView());
         
         world.loadChunks(player.getPosition());
         world.generateMesh();
         world.uploadChunksToGPU();
-        world.render(shader, player.getPosition());
+        world.renderOpaque(player.getPosition());
         
+        if (freeCameraMode || viewMode != ViewMode::FirstPerson){
+            shaderPlayer.use();
+            shaderPlayer.setMat4("projection", projection);
+            shaderPlayer.setMat4("view", getActiveView());
+            shaderPlayer.setMat4("model", glm::translate(glm::mat4(1.0f), player.getPosition()));
+            player.mesh.render();
+        }
+        
+        shaderWorld.use();
+        world.renderTransparent(player.getPosition());
+
         // physics
         if (physics && !freeCameraMode){
             player.updatePhysics(deltaTime);
@@ -244,7 +257,39 @@ void Game::framebuffer_size_callback(GLFWwindow *window, int width, int height) 
     }
 }
 
-void Game::processInput(float deltaTime) {    
+glm::mat4 Game::getActiveView() {
+    if (freeCameraMode){
+        return freeCamera.getView();
+    }
+    if (viewMode == ViewMode::FirstPerson){
+        return player.camera.getView();
+    }
+
+    glm::vec3 eyePos = player.camera.getPosition();
+    glm::vec3 front = player.camera.getFront();
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    // ThirdPersonBack: camera trails behind the player looking the same way.
+    // ThirdPersonFront: camera floats in front ("selfie"), looking back at the player.
+    glm::vec3 castDir = (viewMode == ViewMode::ThirdPersonBack) ? -front : front;
+
+    float allowedDistance = THIRD_PERSON_DISTANCE;
+    RaycastResult raycastResult = raycast(eyePos, castDir, THIRD_PERSON_DISTANCE, world);
+    if (raycastResult.hit){
+        glm::vec3 voxelCenter = raycastResult.placementVoxel + glm::vec3(0.5f);
+        float hitDistance = glm::length(voxelCenter - eyePos);
+        allowedDistance = glm::clamp(hitDistance - THIRD_PERSON_COLLISION_MARGIN,
+                                      THIRD_PERSON_MIN_DISTANCE, THIRD_PERSON_DISTANCE);
+    }
+
+    glm::vec3 camPos = eyePos + castDir * allowedDistance;
+
+    if (viewMode == ViewMode::ThirdPersonBack){
+        return glm::lookAt(camPos, camPos + front, up);
+    }
+    return glm::lookAt(camPos, eyePos, up);
+}
+
+void Game::processInput(float deltaTime) {
 
     uint8_t input = 0;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
@@ -299,7 +344,14 @@ void Game::processInput(float deltaTime) {
             player.setRotation(freeCamera.getYaw(), freeCamera.getPitch());
             freeCameraMode = false;
         }
+    } else if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS){
+        if (!wasF5Pressed && !freeCameraMode){
+            viewMode = static_cast<ViewMode>((static_cast<int>(viewMode) + 1) % 3);
+        }
+        wasF5Pressed = true;
+        return;
     }
+    wasF5Pressed = false;
 }
 
 void Game::mouse_callback(GLFWwindow* window, double xpos, double ypos) {

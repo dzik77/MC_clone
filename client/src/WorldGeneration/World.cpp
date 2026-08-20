@@ -382,7 +382,13 @@ void World::generateMesh() {
 }
 
 void World::loadChunks(glm::vec3 playerPosition) {
-    
+
+    // Unloading is server-driven (see unloadChunkColumn) so it stays consistent with what the
+    // server believes this client has loaded, even across fast/non-monotonic movement. This runs
+    // every frame, independent of the chunk-cell-change check below, so a pending unload isn't
+    // stalled while the player stands still.
+    processPendingUnloads();
+
     //std::cout << "Loading chunks around player position: " << playerPosition.x << ", " << playerPosition.y << ", " << playerPosition.z << std::endl;
     glm::ivec2 chunkPosition(
         static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)),
@@ -394,22 +400,7 @@ void World::loadChunks(glm::vec3 playerPosition) {
     }
     lastPlayerChunkPosition = chunkPosition;
 
-    int pt2 = 0;
-    for (auto it = chunkColumn.begin(); it != chunkColumn.end();) {
-        auto pos = it->first;
-        int x = pos.x;
-        int z = pos.y;
-        if ((x - chunkPosition.x) * (x - chunkPosition.x) + (z - chunkPosition.y) * (z - chunkPosition.y) > renderDistance * renderDistance && it->second.use_count() == 1) {
-            for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
-                freeChunkPositionIndices.push(it->second->chunks[j].ssboIndex);
-            }
-            it = chunkColumn.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
-    for (auto offset : chunksToLoadOffset){        
+    for (auto offset : chunksToLoadOffset){
         glm::ivec2 chunkColumnPos = offset + chunkPosition;
         auto it = chunkColumn.find(chunkColumnPos);
         if (it == chunkColumn.end()) {
@@ -419,7 +410,32 @@ void World::loadChunks(glm::vec3 playerPosition) {
 
         }
     }
-    
+
+}
+
+void World::unloadChunkColumn(glm::ivec2 chunkColumnPos) {
+    pendingChunkUnloads.push_back(chunkColumnPos);
+}
+
+void World::processPendingUnloads() {
+
+    for (auto it = pendingChunkUnloads.begin(); it != pendingChunkUnloads.end();) {
+        auto columnIt = chunkColumn.find(*it);
+        if (columnIt == chunkColumn.end()) {
+            it = pendingChunkUnloads.erase(it); // already gone, nothing to do
+            continue;
+        }
+        if (columnIt->second.use_count() == 1) {
+            for (int j = 0; j < WorldConfig::CHUNK_COLUMN_HEIGHT; j++) {
+                freeChunkPositionIndices.push(columnIt->second->chunks[j].ssboIndex);
+            }
+            chunkColumn.erase(columnIt);
+            it = pendingChunkUnloads.erase(it);
+        } else {
+            ++it; // still referenced by an in-flight mesh job, retry next frame
+        }
+    }
+
 }
 
 void World::meshGenerationWorkerThread() {
@@ -556,9 +572,7 @@ void World::uploadChunksToGPU() {
     
 }
 
-void World::render(Shader& shader, glm::vec3 playerPosition) {
-
-    static bool firstRender = true;
+void World::renderOpaque(glm::vec3 playerPosition) {
 
     std::vector<DrawElementsIndirectCommand> drawCommandsOpaque;
     for (auto offset : chunksToLoadOffset){
@@ -578,6 +592,40 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
         }
     }
 
+    // Advance the double-buffer slot once per frame; renderTransparent reuses currentBufferIndex.
+    currentBufferIndex = currentFrame % 2;
+    currentFrame++;
+
+    if (!drawCommandsOpaque.empty()) {
+        DrawElementsIndirectCommand* cmdPtrOpaque = mappedIndirectCommands + currentBufferIndex * PREALLOCATE_CHUNKS;
+        std::memcpy(cmdPtrOpaque, drawCommandsOpaque.data(), drawCommandsOpaque.size() * sizeof(DrawElementsIndirectCommand));
+    }
+
+    glBindTextureUnit(0, textureArray);
+    glBindVertexArray(globalVAO);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectCommandBuffer);
+
+    // OPAQUE PASS
+    glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+
+    if (!drawCommandsOpaque.empty()) {
+        glMultiDrawElementsIndirect(
+            GL_TRIANGLES,
+            GL_UNSIGNED_SHORT,
+            (void *)(currentBufferIndex * PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand)),
+            drawCommandsOpaque.size(),
+            0
+        );
+    }
+
+    // State left as: blend disabled, depth mask enabled — safe defaults for any
+    // opaque entity rendering (e.g. players) that happens between this call and renderTransparent.
+}
+
+void World::renderTransparent(glm::vec3 playerPosition) {
+
     std::vector<DrawElementsIndirectCommand> drawCommandsTransparent;
     for (auto offset = chunksToLoadOffset.rbegin(); offset != chunksToLoadOffset.rend(); ++offset){
         glm::ivec2 chunkColumnPos  = {static_cast<int>(std::floor(playerPosition.x / WorldConfig::CHUNK_SIZE)) + offset->x, static_cast<int>(std::floor(playerPosition.z / WorldConfig::CHUNK_SIZE)) + offset->y};
@@ -596,39 +644,16 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
         }
     }
 
-    static int currentFrame = 0;
-    int bufferIndex = currentFrame % 2;
-    currentFrame++;
-
-    if (!drawCommandsOpaque.empty()) {
-        DrawElementsIndirectCommand* cmdPtrOpaque = mappedIndirectCommands + bufferIndex * PREALLOCATE_CHUNKS;
-        std::memcpy(cmdPtrOpaque, drawCommandsOpaque.data(), drawCommandsOpaque.size() * sizeof(DrawElementsIndirectCommand));
-    }
+    int bufferIndex = currentBufferIndex;
 
     if (!drawCommandsTransparent.empty()) {
         DrawElementsIndirectCommand* cmdPtrTransparent = mappedIndirectCommands + (2 + bufferIndex) * PREALLOCATE_CHUNKS;
         std::memcpy(cmdPtrTransparent, drawCommandsTransparent.data(), drawCommandsTransparent.size() * sizeof(DrawElementsIndirectCommand));
     }
 
-    shader.use();
     glBindTextureUnit(0, textureArray);
     glBindVertexArray(globalVAO);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectCommandBuffer);
-
-    // OPAQUE PASS
-    glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
-
-    if (!drawCommandsOpaque.empty()) {
-        glMultiDrawElementsIndirect(
-            GL_TRIANGLES, 
-            GL_UNSIGNED_SHORT, 
-            (void *)(bufferIndex * PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand)), 
-            drawCommandsOpaque.size(), 
-            0
-        );
-    }
 
     // TRANSPARENT PASS
     if (!drawCommandsTransparent.empty()) {
@@ -637,10 +662,10 @@ void World::render(Shader& shader, glm::vec3 playerPosition) {
         glDepthMask(GL_FALSE);
 
         glMultiDrawElementsIndirect(
-            GL_TRIANGLES, 
-            GL_UNSIGNED_SHORT, 
-            (void *)((2 + bufferIndex) * PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand)), 
-            drawCommandsTransparent.size(), 
+            GL_TRIANGLES,
+            GL_UNSIGNED_SHORT,
+            (void *)((2 + bufferIndex) * PREALLOCATE_CHUNKS * sizeof(DrawElementsIndirectCommand)),
+            drawCommandsTransparent.size(),
             0
         );
     }

@@ -12,15 +12,26 @@ enum class PacketType : uint8_t {
     PlaceBlock = 5,
     DestroyBlock = 6,
     BlockUpdate = 7,
-    PlayerInitialPosition = 8
+    PlayerInitialPosition = 8,
+    UnloadChunkColumn = 9
 };
 
 #pragma pack(push, 1)
 
+// In-memory, fully decompressed representation of one vertical chunk (used internally by the
+// received-chunks queue and world loading code). This is NOT the wire format anymore -- see
+// ChunkPacketHeader + ChunkCompression.hpp for the compressed bytes actually sent over the network.
 struct ChunkPacket {
     const PacketType type = PacketType::Chunk;
     int32_t x,y,z;
     Block chunkBlocks[WorldConfig::CHUNK_SIZE * WorldConfig::CHUNK_COLUMN_HEIGHT * WorldConfig::CHUNK_SIZE];
+};
+
+// Fixed-size header sent on the wire for PacketType::Chunk, immediately followed by a
+// variable-length compressed body (see ChunkCompression::encodeChunk/decodeChunk).
+struct ChunkPacketHeader {
+    const PacketType type = PacketType::Chunk;
+    int32_t x,y,z;
 };
 struct RequestChunkPacket { // deprecated, not used anymore, but kept for reference
     const PacketType type = PacketType::RequestChunk;
@@ -55,6 +66,11 @@ struct BlockUpdatePacket {
 struct PlayerInitialPositionPacket {
     const PacketType type = PacketType::PlayerInitialPosition;
     glm::vec3 initialPosition;
+};
+struct UnloadChunkColumnPacket {
+    const PacketType type = PacketType::UnloadChunkColumn;
+    int32_t chunkColumnX;
+    int32_t chunkColumnZ;
 };
 
 #pragma pack(pop)

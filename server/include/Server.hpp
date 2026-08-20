@@ -39,6 +39,7 @@ class Server{
         ENetHost* server;
         ENetAddress address;
         void handlePacket(ENetEvent& event);
+        void sendUnloadChunkColumnPacket(ENetPeer* peer, glm::ivec2 chunkColumnPos);
 
         // Client management
         struct ENetAdressHash {
@@ -58,8 +59,8 @@ class Server{
         void consoleInput();
 
         // World generation
-        int renderDistance = 20;
-        int simulationRenderDistance = renderDistance + 1;
+        static constexpr int maxChunkColumnsSentPerTick = 50; // Maximum number of chunks to send per tick
+        int renderDistance = 32;
         std::vector<glm::ivec2> chunksToLoadOffset;
         void setRenderDistance(int distance);
         World world;

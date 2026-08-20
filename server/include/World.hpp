@@ -15,6 +15,14 @@
 #include <iostream>
 #include <thread>
 #include <condition_variable>
+#include <ChunkCompression.hpp>
+#include <cstring>
+
+// One compressed, ready-to-send chunk packet (header + variable-length compressed body).
+struct ChunkSendBuffer {
+    uint8_t data[sizeof(ChunkPacketHeader) + ChunkCompression::MAX_BODY_SIZE];
+    size_t length;
+};
 
 class World : public IWorldAccessor {
     public:
@@ -33,10 +41,9 @@ class World : public IWorldAccessor {
                 return 0;
             }
         }
-        void loadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
         void sentAndLoadChunkColumn(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
         void generateTerrain(glm::ivec2 chunkColumnPosition, ENetPeer* peer);
-        ChunkPacket* chunkColumnToPacket(ChunkColumn& chunkColumn);
+        ChunkSendBuffer* chunkColumnToPacket(ChunkColumn& chunkColumn);
         void uploadChunk(std::shared_ptr<ChunkColumn> chunkColumn){
             chunkColumns[chunkColumn->position] = std::move(chunkColumn);
         }
@@ -85,7 +92,7 @@ class World : public IWorldAccessor {
     private:
         
     // Noise generator for terrain generation
-    FastNoise::SmartNode<FastNoise::Simplex> continentalness, erosion, peaksAndValleys;
+    FastNoise::SmartNode<FastNoise::Simplex> continentalness, erosion, peaksAndValleys, vegetation;
     FastNoise::SmartNode<FastNoise::FractalFBm> erosionFractal;
     FastNoise::SmartNode<FastNoise::FractalFBm> peaksAndValleysFractal;
     
@@ -93,7 +100,28 @@ class World : public IWorldAccessor {
     TerrainSpline continentalnessSpline;
     TerrainSpline erosionSpline;
     TerrainSpline peaksAndValleysSpline;
-    
+
+    uint32_t squirrel3(uint32_t n, uint32_t seed) {
+        constexpr uint32_t BIT_NOISE1 = 0x68E31DA4;
+        constexpr uint32_t BIT_NOISE2 = 0xB5297A4D;
+        constexpr uint32_t BIT_NOISE3 = 0x1B56C4E9;
+        n *= BIT_NOISE1;
+        n += seed;
+        n ^= (n >> 8);
+        n += BIT_NOISE2;
+        n ^= (n << 8);
+        n *= BIT_NOISE3;
+        n ^= (n >> 8);
+        return n;
+    }
+    uint32_t hashCell(int cellX, int cellZ) {
+        constexpr uint32_t PRIME = 198491317u;
+        return squirrel3(static_cast<uint32_t>(cellX) + PRIME * static_cast<uint32_t>(cellZ), static_cast<uint32_t>(seed));
+    }
+
+    // Margin of extra noise sampled past each column's edge, for a future decoration pass to read without needing neighboring columns generated
+    static constexpr int borderMargin = 8;
+    static constexpr int treeMargin = 5;
 
     // Chunk data
     ankerl::unordered_dense::map<glm::ivec2, std::shared_ptr<ChunkColumn>, IVec2Hash> chunkColumns; // access only on main thread

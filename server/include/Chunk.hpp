@@ -23,7 +23,6 @@ struct ChunkColumn{
 struct ChunkToGenerate {
     int x;
     int z;
-    bool send;
     ENetPeer* peer;
 };
 struct ChunkToSend {

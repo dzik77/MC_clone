@@ -5,6 +5,15 @@ project(IntroductionGame)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Default to Release build if none specified
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# Release optimization flags
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+
 # --- Dependency Management (FetchContent) ---
 include(FetchContent)
 
@@ -94,6 +103,7 @@ file(GLOB_RECURSE SERVER_SRC CONFIGURE_DEPENDS "server/src/*.cpp" "server/src/*.
 if(SERVER_SRC)
     add_executable(server_app ${SERVER_SRC})
     target_include_directories(server_app PRIVATE server/include)
+    #target_compile_definitions(server_app PRIVATE PERFORMANCE_DEBUG)
     target_link_libraries(server_app PRIVATE core_lib Threads::Threads)
     if(WIN32)
         target_link_libraries(server_app PRIVATE ws2_32 winmm)
