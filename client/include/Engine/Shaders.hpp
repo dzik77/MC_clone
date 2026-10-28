@@ -16,6 +16,9 @@ class Shader {
         void use() const {
             glUseProgram(ID);
         }
+        unsigned int getID() const {
+            return ID;
+        }
         void setBool(const std::string &name, bool value) const;
         void setInt(const std::string &name, int value) const;
         void setFloat(const std::string &name, float value) const;

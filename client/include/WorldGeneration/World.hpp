@@ -111,6 +111,7 @@ class World : public IWorldAccessor {
             std::shared_ptr<ChunkColumn> chunkColumn_Left;
             std::shared_ptr<ChunkColumn> chunkColumn_Right;
             int timestamp;
+            bool priority; // block edits jump the upload queue too, not just the mesh queue
         };
         int timeStamp = 0;
         std::deque<MeshJob> chunksToGenerateMeshQueue;
@@ -123,10 +124,10 @@ class World : public IWorldAccessor {
         std::vector<std::thread> meshGenerationThreads;
 
         // Chunks waiting for mesh upload to GPU
-        std::queue<glm::ivec3> chunksToUploadToGPU;
+        std::deque<glm::ivec3> chunksToUploadToGPU;
         std::mutex chunksToUploadToGPU_mutex;
 
-        const int chunksToUploadToGPUPerFrame = 10; // Limit the number of chunks uploaded to GPU per frame to avoid stalling the GPU
+        const int chunksToUploadToGPUPerFrame = 100; // Limit the number of chunks uploaded to GPU per frame to avoid stalling the GPU
 
         // IWorldAccessor implementation
         Block getBlockAt(const glm::ivec3& position) const override;

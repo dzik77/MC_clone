@@ -194,6 +194,11 @@ void Game::run() {
             shaderPlayer.setMat4("projection", projection);
             shaderPlayer.setMat4("view", getActiveView());
             shaderPlayer.setMat4("model", glm::translate(glm::mat4(1.0f), player.getPosition()));
+            glm::mat4 partTransforms[6];
+            for (int i = 0; i < 6; i++) {
+                partTransforms[i] = glm::rotate(glm::mat4(1.0f), glm::radians(60.0f * i), glm::vec3(0.0f, 1.0f, 0.0f)); // Initialize to identity matrix
+            }
+            glUniformMatrix4fv(glGetUniformLocation(shaderPlayer.getID(), "partTransforms"), 6, GL_FALSE, glm::value_ptr(partTransforms[0]));
             player.mesh.render();
         }
         

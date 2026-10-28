@@ -230,7 +230,7 @@ void World::regenerateMeshForChunk(glm::ivec3 position) {
     
     {
         std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
-        chunksToGenerateMeshQueue.push_front({it->second, position.y, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++}); // priority meshing, timestamp 0
+        chunksToGenerateMeshQueue.push_front({it->second, position.y, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++, true}); // priority meshing
     }
     chunksToGenerateMeshQueue_cv.notify_one();
 
@@ -315,7 +315,7 @@ void World::generateMesh() {
         {
             std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
             for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
-                chunksToGenerateMeshQueue.push_back({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
+                chunksToGenerateMeshQueue.push_back({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++, false});
                 chunksPushed++;
             }
         }
@@ -368,7 +368,7 @@ void World::generateMesh() {
         {
             std::lock_guard<std::mutex> lock(chunksToGenerateMeshQueue_mutex);
             for (int height = 0; height < WorldConfig::CHUNK_COLUMN_HEIGHT; height++){
-                chunksToGenerateMeshQueue.push_back({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++});
+                chunksToGenerateMeshQueue.push_back({column->second, height, chunkColumFront, chunkColumBack, chunkColumLeft, chunkColumRight, timeStamp++, false});
             }
         }
         
@@ -471,12 +471,18 @@ void World::meshGenerationWorkerThread() {
             }
         }
 
-        // Send back meshed to be uploaded to GPU
+        // Send back meshed to be uploaded to GPU. Priority jobs (block edits) go to the front so
+        // they aren't stuck behind the terrain-streaming backlog, which the per-frame upload budget
+        // can take thousands of frames to drain.
         {
             std::lock_guard<std::mutex> lock(chunksToUploadToGPU_mutex);
             for (int i = 0; i < jobCount; i++) {
                 glm::ivec3 chunkPos(job[i].chunkColumn->position.x, job[i].columnHeight, job[i].chunkColumn->position.y);
-                chunksToUploadToGPU.push(chunkPos);
+                if (job[i].priority) {
+                    chunksToUploadToGPU.push_front(chunkPos);
+                } else {
+                    chunksToUploadToGPU.push_back(chunkPos);
+                }
             }
         }
 
@@ -493,7 +499,7 @@ void World::uploadChunksToGPU() {
             std::lock_guard<std::mutex> lock(chunksToUploadToGPU_mutex);
             if (chunksToUploadToGPU.empty()) break;
             chunkPos = chunksToUploadToGPU.front();
-            chunksToUploadToGPU.pop();
+            chunksToUploadToGPU.pop_front();
         }
         auto it = chunkColumn.find({chunkPos.x, chunkPos.z});
         if (it == chunkColumn.end()) {

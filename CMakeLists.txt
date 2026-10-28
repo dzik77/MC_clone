@@ -122,4 +122,42 @@ if(CLIENT_SRC)
     elseif(UNIX AND NOT APPLE)
         target_link_libraries(client_app PRIVATE dl)
     endif()
+
+    # --- Runtime assets: keep Shaders/ and textures/ next to the binary ---
+    # Re-copied automatically whenever any asset file changes (stamp-guarded so
+    # untouched builds do no work). CONFIGURE_DEPENDS re-runs CMake when files
+    # are added or removed.
+    # Pin the binary location so the assets can be staged beside it without
+    # depending on client_app itself (that would be a dependency cycle).
+    set(CLIENT_RUNTIME_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    set_target_properties(client_app PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "$<1:${CLIENT_RUNTIME_DIR}>")
+
+    file(GLOB_RECURSE CLIENT_ASSETS CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/client/Shaders/*"
+        "${CMAKE_CURRENT_SOURCE_DIR}/client/textures/*")
+
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.26)
+        set(COPY_DIR_CMD copy_directory_if_different)
+    else()
+        set(COPY_DIR_CMD copy_directory)
+    endif()
+
+    set(CLIENT_ASSETS_STAMP "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/client_assets.stamp")
+    add_custom_command(
+        OUTPUT ${CLIENT_ASSETS_STAMP}
+        COMMAND ${CMAKE_COMMAND} -E ${COPY_DIR_CMD}
+                "${CMAKE_CURRENT_SOURCE_DIR}/client/Shaders"
+                "${CLIENT_RUNTIME_DIR}/Shaders"
+        COMMAND ${CMAKE_COMMAND} -E ${COPY_DIR_CMD}
+                "${CMAKE_CURRENT_SOURCE_DIR}/client/textures"
+                "${CLIENT_RUNTIME_DIR}/textures"
+        COMMAND ${CMAKE_COMMAND} -E touch ${CLIENT_ASSETS_STAMP}
+        DEPENDS ${CLIENT_ASSETS}
+        COMMENT "Copying Shaders and textures to build directory"
+        VERBATIM)
+
+    add_custom_target(client_assets DEPENDS ${CLIENT_ASSETS_STAMP})
+    add_dependencies(client_app client_assets)
+
 endif()
